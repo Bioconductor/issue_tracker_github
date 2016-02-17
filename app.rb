@@ -3,6 +3,7 @@ require 'json'
 require 'octokit'
 require 'yaml'
 require 'httparty'
+require 'pry' # remove this when not needed
 
 # here, define the repo we care about
 # and other stuff.
@@ -44,22 +45,69 @@ end
 # we are not getting spoof requests, see
 # https://help.github.com/articles/what-ip-addresses-does-github-use-that-i-should-whitelist/#service-hook-ip-addresses
 post '/' do
+  if is_spoof? request
+    puts "IP is not from github"
+    return "sorry, working through some trust issues with unknown IP addresses."
+  end
   json = request.body.read
   obj = JSON.parse json
+  if (!obj.has_key?'action') and (!obj.has_key?'ref')
+    return 'I can only handle push, issue, and issue comment event hooks'
+  end
+  if obj.has_key? 'ref'
+    return handle_push(obj)
+  end
   if obj['repository']['full_name'] != settings.new_issue_repo
     puts "got a request from #{obj['repository']['full_name']}, not the one we like."
     return "ignoring issue from other repo"
   end
-  if obj['action'] == "opened"
-    handle_new_issue(obj)
-  elsif obj['action'] == "created" # new issue comment was created
-    handle_new_comment(obj)
+  if obj.has_key? 'action' and obj['action'] == "opened"
+    return handle_new_issue(obj)
+  elsif obj.has_key? 'action' and obj['action'] == "created" # new issue comment was created
+    return handle_new_comment(obj)
   end
   'you posted something!'
 end
 
+def is_spoof? (request)
+  # we should use https and basic auth as described at
+  # https://help.github.com/articles/what-ip-addresses-does-github-use-that-i-should-whitelist/#service-hook-ip-addresses
+  # although I'm not sure exactly how this is supposed to work.
+  # At that point, request.env['REQUEST_URI'] will start with 'https://'
+  # (i guess) if https is available.
+  # However, in development we don't have that yet. So use IP whitelisting.
+  # Also, this is not ipv6 compatible.
+  if request.env.has_key? 'HTTP_X_FORWARDED_FOR'
+    ip = request.env['HTTP_X_FORWARDED_FOR']
+  else
+    ip = request.env['REMOTE_ADDR']
+  end
+  return false if ip == "127.0.0.1" # allow local testing
+  regex = %r{^192\.30\.25[2345]\.}
+  ip !~ regex
+end
+
+def handle_push(obj)
+  puts "in handle_push"
+  # FIXME ignore pushes from repos that haven't set up an issue in
+  # our new packages repo. (We could post an issue in those repos
+  # if we want to make sure the package author sees it.)
+  return "handled push"
+end
+
 def handle_new_comment(obj)
+  if obj['comment']['user']['login'] == Octokit.user.login
+    puts "only the echoes of my mind"
+    return "Ignoring comments that I made myself."
+  end
+  if obj['issue']['state'] == 'closed'
+    puts 'comment on a closed issue, ignoring'
+    # TODO - are we sure we want to ignore these?
+    # sometimes people want to test stuff.....
+    return "Ignoring comments on closed issues."
+  end
   puts "got a new comment!"
+  return "handled new comment"
 end
 
 def handle_new_issue(obj)
@@ -144,4 +192,5 @@ def handle_new_issue(obj)
     Octokit.add_comment(settings.new_issue_repo, issue_number, comment)
   end
   puts "this is the body:\n #{body}"
+  return "handled new issue"
 end
