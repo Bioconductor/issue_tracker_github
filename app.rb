@@ -9,19 +9,24 @@ require 'pry' # remove this when not needed
 # and other stuff.
 # this repo must have bioc-issue-bot as a collaborator, and
 # must have a hook defined that points to this app and
-# pushes (at least) the "Issues" and "Issue comment" events.
+# pushes (at least) the "Issues" event.
+# After 'registering' their package in our issues repo,
+# developers can then set up webhooks to send us push
+# notifications.
+# Also need to make sure that the repos has whatever
+# custom labels (defined on issues) that we make use
+# of in this script. So far they are:
+#  - new-package
+# See https://help.github.com/articles/creating-and-editing-labels-for-issues-and-pull-requests/
 set :new_issue_repo, "dtenenba/settings"
 auth_config = YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" ))
-# FIXME - SHOULD use OAuth but having issues:
+# A note about OAuth. When setting up the token, the it must have
+# the 'public_repo' scope.
 auth_key = auth_config['auth_key']
-login = auth_config['login']
-password = auth_config['password']
 
 # FIXME - do authentication more often (on requests?) so it doesn't go stale?
 Octokit.configure do |c|
-  #c.access_token = auth_key
-  c.login = login
-  c.password = password
+  c.access_token = auth_key
 end
 
 
@@ -52,7 +57,7 @@ post '/' do
   json = request.body.read
   obj = JSON.parse json
   if (!obj.has_key?'action') and (!obj.has_key?'ref')
-    return 'I can only handle push, issue, and issue comment event hooks'
+    return 'I can only handle push and issue event hooks'
   end
   if obj.has_key? 'ref'
     return handle_push(obj)
@@ -61,10 +66,10 @@ post '/' do
     puts "got a request from #{obj['repository']['full_name']}, not the one we like."
     return "ignoring issue from other repo"
   end
-  if obj.has_key? 'action' and obj['action'] == "opened"
+  # FIXME allow people to continue to build (closed?) issues
+  # if they have the label "testing".
+  if obj.has_key? 'action' and  obj['action'] == "opened"
     return handle_new_issue(obj)
-  elsif obj.has_key? 'action' and obj['action'] == "created" # new issue comment was created
-    return handle_new_comment(obj)
   end
   'you posted something!'
 end
@@ -95,25 +100,10 @@ def handle_push(obj)
   return "handled push"
 end
 
-def handle_new_comment(obj)
-  if obj['comment']['user']['login'] == Octokit.user.login
-    puts "only the echoes of my mind"
-    return "Ignoring comments that I made myself."
-  end
-  if obj['issue']['state'] == 'closed'
-    puts 'comment on a closed issue, ignoring'
-    # TODO - are we sure we want to ignore these?
-    # sometimes people want to test stuff.....
-    return "Ignoring comments on closed issues."
-  end
-  puts "got a new comment!"
-  return "handled new comment"
-end
-
 def handle_new_issue(obj)
   puts "got a new issue!"
   body = obj['issue']['body']
-  regex = %r{https://github.com/[^/]+/[^ /]+}
+  regex = %r{https://github.com/[^/]+/[^ /\s]+}
   match = body.scan(regex)
   issue_number = obj['issue']['number']
   if match.empty?
@@ -190,6 +180,7 @@ def handle_new_issue(obj)
 
     END
     Octokit.add_comment(settings.new_issue_repo, issue_number, comment)
+    Octokit.add_labels_to_an_issue(settings.new_issue_repo, issue_number, ["new-package"])
   end
   puts "this is the body:\n #{body}"
   return "handled new issue"
