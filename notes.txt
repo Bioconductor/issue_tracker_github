@@ -1,0 +1,76 @@
+when a new issue is filed:
+    if (gatekeeper_mode):
+        mark issue as 'awaiting moderation'
+        give user instructions on how to set up push hook
+        store name of their repos but indicate that we don't automatically build yet
+        send email to devteam with links to moderate (accept or reject) the package
+            when the accept or reject link is clicked:
+                if 'moderated_ok'  or 'rejected' label is present in issue:
+                    just report that package has already been dealt with
+                else:
+                    apply appropriate label, save state
+                    if the package has been approved:
+                        start a build
+                        in the issue, mention that we have started a build
+                        but that in the future they will need to set up the push hook
+                        to trigger builds on commits
+    else: # not gatekeeper mode
+        mark issue as 'new issue'
+        save repos in db and flag it as ok to build (this can be done via a label)
+        tell contributor how to set up push hook, mention that further
+          builds will require the push hook be set up
+        start a build
+
+on build completion:
+    post to issue with link to build report, add label with build status
+    (remove statuses that no longer apply)
+
+on push hook:
+    if we know about the repos (db lookup) and have ok'd builds (label): #
+      (issue must be open unless the 'testing' label is present)
+        start a build
+
+    else:
+        post to issue saying sorry, we can't build. you can remove your hook
+        to stop seeing these messages.
+
+labels:
+    build_permitted
+    testing (allows building on closed issues)
+    awaiting_build_permission
+    OK
+    ERROR
+    TIMEOUT
+    WARNINGS
+    abnormal
+    sent-back
+    preview-in-progress
+    modified-package
+    pre-accepted
+    accepted (close issue when applying this label)
+    remove canned labels if not relevant (most are not)
+separate logic from web app
+
+unit tests?
+
+factor out (dev/prod beta/live):
+    repo to post to
+    email address to send gatekeeper emails to
+    stomp broker host/port
+
+persistent state (db or text file?)
+    list of known repos (conceivably could use github for this...)
+    hashed "pw"
+
+Questions:
+how do we protect against the same package being submitted twice?
+how do we deal with multiple related packages?
+what about large data packages?
+should we rename the issue to the name of the package (if not already named thusly)
+
+
+
+write code to initialize repos? (with issue labels, new issue template, etc.
+    requires that bioc issue bot be a collaborator on the repos)
+
+deployment / chef
