@@ -3,6 +3,7 @@ require 'json'
 require 'octokit'
 require 'yaml'
 require 'httparty'
+require 'net/smtp'
 require 'pry' # remove this when not needed
 
 # here, define the repo we care about
@@ -17,14 +18,17 @@ require 'pry' # remove this when not needed
 # custom labels (defined on issues) that we make use
 # of in this script. So far they are:
 #  - new-package
+# Also, build system statuses (with appropriate colors):
+# OK WARNINGS TIMEOUT ERROR abnormal
 # See https://help.github.com/articles/creating-and-editing-labels-for-issues-and-pull-requests/
 set :new_issue_repo, "dtenenba/settings"
 auth_config = YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" ))
-# A note about OAuth. When setting up the token, the it must have
-# the 'public_repo' scope.
+# A note about OAuth. When setting up the token, it must have
+# the 'public_repo' scope
 auth_key = auth_config['auth_key']
 
 # FIXME - do authentication more often (on requests?) so it doesn't go stale?
+# Not sure yet if this is a problem.
 Octokit.configure do |c|
   c.access_token = auth_key
 end
@@ -166,21 +170,78 @@ def handle_new_issue(obj)
     # FIXME - also make sure it's not a repos in Bioconductor-mirror
     # or another one that we definitely know about referring
     # to a package that has already been accepted.
-    comment = <<-END.unindent
-      Thanks! You submitted a single valid GitHub URL that points to
-      an R package (at least it has a DESCRIPTION file).
+    require_preapproval = true
+    if require_preapproval
+      # FIXME change this to devteam-bioc@lists.fhcrc.org in production
+      # (from address is configured to be able to send email to devteam):
+      recipient_email = "dtenenba@fredhutch.org"
+      recipient_name = "Dan Tenenbaum" # also change in prod
+      from_email = "bioc-github-noreply@bioconductor.org"
+      issue = Octokit.issue(settings.new_issue_repo, issue_number)
+      msg = <<-END.unindent
+        From: Bioconductor Issue Tracker <#{from_email}>
+        To: #{recipient_name} <#{recipient_email}>
+        Subject: New package submitted to tracker (issue ##{issue_number}: #{issue[:title]})
 
-      Pretend that I have run the single package builder
-      on your package and put the results here:
+        Hi Bioconductors,
 
-      https://some.invalid.url/that/contains/your/build/results/
+        Someone submitted a package to the tracker (https://github.com/#{settings.new_issue_repo}/issues)
+        and I'd like you to take a quick look at it before we let it into the
+        single package builder.
 
-      In reality this code is not integrated with the SPB yet so this
-      is just a stub.
+        Just make sure that
 
-    END
-    Octokit.add_comment(settings.new_issue_repo, issue_number, comment)
-    Octokit.add_labels_to_an_issue(settings.new_issue_repo, issue_number, ["new-package"])
+        1) it looks like a package that is intended for Bioconductor,
+        and not just one that is trying to use the single package builder
+        for free; and
+        2) It does not seem like a malicious package that will try to
+        cause damage to our build system. Don't check exhaustively
+        for this because there are many ways to hide badness.
+
+        The package is at the following github repository:
+
+        #{match.first.strip}
+
+        If you approve of it, please click the following link:
+
+        ...
+
+        To reject it, click here:
+
+        ...
+
+        Only one person needs to do this. After the package has been
+        approved (or rejected) once, the remaining steps will be handled
+        automatically.
+
+        The contributor will be told to read the guidelines and try again.
+        You can always post a more personalized message by going
+        to https://github.com/#{settings.new_issue_repo}/issues/#{issue_number}
+        (instead of clicking the reject link above).
+        Type a message and then click "Close Issue".
+
+        Please don't reply to this email.
+      END
+      mail = auth_config['mail']
+      smtp = Net::SMTP.new(mail['server'], mail['port'])
+      smtp.enable_starttls if mail['tls']
+      smtp.start('localhost', mail['username'], mail['password'])
+      smtp.send_message(msg, from_email, recipient_email)
+
+    else
+      comment = <<-END.unindent
+        Thanks! You submitted a single valid GitHub URL that points to
+        an R package (at least it has a DESCRIPTION file).
+
+        Your package is now submitted to our queue.
+
+        FIXME - add more info here about how to
+        add a push hook to your repos to build on subsequent
+        pushes....
+      END
+      Octokit.add_comment(settings.new_issue_repo, issue_number, comment)
+      Octokit.add_labels_to_an_issue(settings.new_issue_repo, issue_number, ["new-package"])
+    end
   end
   puts "this is the body:\n #{body}"
   return "handled new issue"
