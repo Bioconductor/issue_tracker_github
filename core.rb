@@ -450,8 +450,7 @@ module Core
 
 
   def Core.start_build(repos_url, issue_number)
-    repos_url_copy = repos_url.sub(/\/$|\.git$/, '')
-    segs = repos_url_copy.split('/')
+    segs = repos_url.sub(/\/$|\.git$/, '').split('/')
     pkgname = segs.last
     now = Time.now
     tzname = now.zone
@@ -466,11 +465,7 @@ module Core
     obj = {}
     obj['job_id'] = "#{pkgname}_#{timestamp1}"
     obj['time'] = timestamp2
-    obj['client_id'] = "single_package_builder_github:#{issue_number}:#{repos_url}"
-
-
-
-
+    obj['client_id'] = "single_package_builder_github:#{issue_number}:#{pkgname}"
     obj['force'] = true
     config_yaml = Core.get_bioc_config_yaml()
     devel_version = config_yaml['devel_version']
@@ -481,7 +476,7 @@ module Core
     json = obj.to_json
 
     stomp = Config.auth_config['stomp']
-    stomp_hash = {hosts: [{host: stomp['broker'], port: 61613}]}
+    stomp_hash = {hosts: [{host: stomp['broker'], port: stomp['port']}]}
     client = Stomp::Client.new(stomp_hash)
     client.publish("/topic/buildjobs", json)
   end
