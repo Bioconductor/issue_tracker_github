@@ -428,7 +428,7 @@ module Core
           Your package is now submitted to our queue.
 
           **IMPORTANT**: Please read
-          [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.MD)
+          [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
           for setting up a push hook on your repository, or
           further changes to your repository will NOT trigger a new
           build.
@@ -526,7 +526,7 @@ module Core
         Your package is now submitted to our queue.
 
         **IMPORTANT**: Please read
-        [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.MD)
+        [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
         for setting up a push hook on your repository, or
         further changes to your repository will NOT trigger a new
         build.
