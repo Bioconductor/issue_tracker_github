@@ -11,7 +11,6 @@ require 'stomp'
 require 'open-uri'
 require 'pry' # remove this when not needed
 
-
 class String
   # Strip leading whitespace from each line that is the same as the
   # amount of whitespace on the first line of the string.
@@ -51,7 +50,7 @@ module Core
   # and other stuff.
   # this repo must have bioc-issue-bot as a collaborator, and
   # must have a hook defined that points to this app and
-  # pushes (at least) the "Issues" event.
+  # pushes (at least) the "Issues"  and "Issue comments" events.
   # After 'registering' their package in our issues repo,
   # developers can then set up webhooks to send us push
   # notifications.
@@ -160,10 +159,13 @@ module Core
     json = request.body.read
     obj = JSON.parse json
     if (!obj.has_key?'action') and (!obj.has_key?'ref')
-      return 'I can only handle push and issue event hooks'
+      return 'I can only handle push and issue (and issue comment)event hooks'
     end
     if obj.has_key? 'ref'
       return Core.handle_push(obj)
+    end
+    if obj.has_key? 'action' and obj['action'] == "created"
+      return Core.handle_issue_comment(obj)
     end
     if obj['repository']['full_name'] != Core::NEW_ISSUE_REPO
       puts "got a request from #{obj['repository']['full_name']}, not the one we like."
@@ -177,9 +179,18 @@ module Core
     'you posted something!'
   end
 
+  def Core.handle_issue_comment(obj)
+    # TODO implement
+    # issue comments may be used to submit additional packages
+    # (such as experiment data packages) to be reviewed together
+    # with the main package.
+    # Be sure and ignore all comments posted by this bot itself.
+    return "handled issue comment"
+  end
 
-  def Core.handle_existing_issue(existing_issue_number, issue_number)
+  def Core.handle_existing_issue(existing_issue_number, issue_number, login)
     comment= <<-END.unindent
+      Dear @#{login} ,
       You (or someone) has already posted that repository to our tracker.
 
       See https://github/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
@@ -190,8 +201,23 @@ module Core
 
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(issue_number)
     return "duplicate issue"
+  end
+
+  # When you want to close an issue, use this.
+  def Core.close_issue(issue_number, issue=nil)
+    unless issue.nil?
+      issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    end
+    title = issue['title']
+    title = "(inactive) " + title unless title.start_with? "(inactive) "
+    unless title == issue['title']
+      Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number,
+      title, issue['body'])
+    end
+    # This should be the only place where Octokit.close_issue is called directly.
+    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
   end
 
   def Core.handle_push(obj)
@@ -233,7 +259,7 @@ module Core
       I am closing this issue. Please try again with a new issue.
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(Core::NEW_ISSUE_REPO, issue_number)
     return "no github URL in new issue comment"
   end
 
@@ -249,7 +275,7 @@ module Core
       I am closing this issue. Please try again with a new issue.
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(issue_number)
     return "found multiple URLs in new issue comment"
   end
 
@@ -271,7 +297,7 @@ module Core
       I am closing this issue. Please try again with a new issue.
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(issue_number)
     return "repos does not exist"
   end
 
@@ -294,7 +320,7 @@ module Core
       I am closing this issue. Please try again with a new issue.
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(issue_number)
     return "no description file found!"
   end
 
@@ -308,6 +334,7 @@ module Core
       Hi devteam,
 
       Someone submitted a package to the tracker
+      with the title '#{issue['title']}'
       (https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number})
       and I'd like you to take a quick look at it before we let it into the
       single package builder.
@@ -323,7 +350,7 @@ module Core
 
       The package is at the following github repository:
 
-      #{full_repos_url}
+      https://github.com/#{repos}
 
       If you approve of it, please click the following link:
 
@@ -375,7 +402,7 @@ module Core
       unless Core.repo_exists? (repos_url) # github url points to nonexistent repos
         return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
       end
-      unless Core.has_description_file? (repos_url)
+      unless Core.has_description_file?(repos_url, obj)
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
       # looking good so far....
@@ -390,9 +417,9 @@ module Core
 
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
-      Core.add_repos_to_db(repos, hash, issue_number)
+      Core.add_repos_to_db(repos_url, hash, issue_number)
       if REQUIRE_PREAPPROVAL
-        return Core.handle_preapproval(full_repos_url, issue_number, password)
+        return Core.handle_preapproval(repos_url, issue_number, password)
       else
         comment = <<-END.unindent
           Thanks, @#{login} ! You submitted a single valid GitHub URL that points to
@@ -401,7 +428,7 @@ module Core
           Your package is now submitted to our queue.
 
           **IMPORTANT**: Please read
-          [the instructions](../../blob/master/CONTRIBUTING.MD)
+          [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.MD)
           for setting up a push hook on your repository, or
           further changes to your repository will NOT trigger a new
           build.
@@ -409,7 +436,7 @@ module Core
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
         ["new-package", "ok_to_build"])
-        Core.start_build(repos, issue_number)
+        Core.start_build(repos_url, issue_number)
       end
     end
     return "handled new issue"
@@ -471,7 +498,7 @@ module Core
       return("this issue has already been rejected (and closed).")
     end
     labels = Octokit.labels_for_issue(CoreConfig.auth_config['issue_repo'], issue_number)
-    unless labels.find {|i| i.name == "ok_to_build"}
+    if labels.find {|i| i.name == "ok_to_build"}
       return "this issue has already been marked 'ok_to_build'."
     end
     if action == "reject"
@@ -491,7 +518,7 @@ module Core
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
-      Octokit.close_issue(CoreConfig.auth_config['issue_repo'], issue_number)
+      Core.close_issue(issue_number, issue)
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
@@ -499,7 +526,7 @@ module Core
         Your package is now submitted to our queue.
 
         **IMPORTANT**: Please read
-        [the instructions](../../blob/master/CONTRIBUTING.MD)
+        [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.MD)
         for setting up a push hook on your repository, or
         further changes to your repository will NOT trigger a new
         build.
