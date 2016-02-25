@@ -117,7 +117,7 @@ module Core
     begin
       CoreConfig.db.results_as_hash = true
       rows = CoreConfig.db.execute("select * from repos where name = ?",
-        name)
+        repo_name)
       return nil if rows.empty?
       return rows.first
     ensure
@@ -188,6 +188,8 @@ module Core
     return "handled issue comment"
   end
 
+  # FIXME This checks if our DB already has a rowa with the same repos name.
+  # We should also check if GitHub already has a repo with this name.
   def Core.handle_existing_issue(existing_issue_number, issue_number, login)
     comment= <<-END.unindent
       Dear @#{login} ,
@@ -223,11 +225,11 @@ module Core
   def Core.handle_push(obj)
     puts "in handle_push"
     repos = obj['repository']['full_name']
-    unless Core.repo_exists? repos
+    db_record = get_repo_by_repo_name(repos)
+    if db_record.nil?
       return "Sorry, you haven't told us about this repository, please
       go to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/new ."
     end
-    db_record = get_repo_by_repo_name(repos)
     issue_number = db_record['issue_number']
     issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
     build_ok = false
@@ -279,7 +281,7 @@ module Core
     return "found multiple URLs in new issue comment"
   end
 
-  def Core.repo_exists? (repos_url)
+  def Core.repo_exists_in_github? (repos_url)
     begin
       repos = Octokit.repository(repos_url)
       return true
@@ -399,7 +401,7 @@ module Core
     else # there is just one URL
       full_repos_url = match.first.strip
       repos_url = full_repos_url.sub("https://github.com/", "")
-      unless Core.repo_exists? (repos_url) # github url points to nonexistent repos
+      unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
         return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
       end
       unless Core.has_description_file?(repos_url, obj)
