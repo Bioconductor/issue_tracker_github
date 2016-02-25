@@ -21,7 +21,7 @@ class String
   end
 end
 
-class Config
+class CoreConfig
   @@request_uri  = nil
   @@db = nil
   @@auth_config = nil
@@ -63,15 +63,16 @@ module Core
   # OK WARNINGS TIMEOUT ERROR abnormal
   # See https://help.github.com/articles/creating-and-editing-labels-for-issues-and-pull-requests/
 
-  Config.set_auth_config(YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" )))
+  CoreConfig.set_auth_config(YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" )))
 
 
 
-  NEW_ISSUE_REPO = Config.auth_config['issue_repo']
+  NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
+  REQUIRE_PREAPPROVAL = CoreConfig.auth_config['require_preapproval']
 
   # A note about OAuth. When setting up the token, it must have
   # the 'public_repo' scope
-  auth_key = Config.auth_config['auth_key']
+  auth_key = CoreConfig.auth_config['auth_key']
 
   # FIXME - do authentication more often (on requests?) so it doesn't go stale?
   # Not sure yet if this is a problem.
@@ -80,9 +81,9 @@ module Core
   end
 
   dbfile = File.join(File.dirname(__FILE__), "db.sqlite3" )
-  Config.set_db(SQLite3::Database.new dbfile)
+  CoreConfig.set_db(SQLite3::Database.new dbfile)
   if (!File.exists? dbfile) or (File.size(dbfile) == 0)
-    rows = Config.db.execute <<-SQL.unindent
+    rows = CoreConfig.db.execute <<-SQL.unindent
       create table repos (
         id integer primary key,
         name varchar(255) unique not null,
@@ -93,27 +94,40 @@ module Core
   end
 
   def Core.get_repo_issue_number (repo)
-    rows = Config.db.execute("select issue_number from repos where name = ?",
+    rows = CoreConfig.db.execute("select issue_number from repos where name = ?",
       repo.sub(/https:\/\/github.com\//i, ""))
     return nil if rows.empty?
     rows.first.first
   end
 
   def Core.get_repo_by_issue_number(issue_number)
-    results_as_hash = Config.db.results_as_hash
+    results_as_hash = CoreConfig.db.results_as_hash
     begin
-      Config.db.results_as_hash = true
-      rows = Config.db.execute("select * from repos where issue_number = ?",
+      CoreConfig.db.results_as_hash = true
+      rows = CoreConfig.db.execute("select * from repos where issue_number = ?",
         issue_number)
       return nil if rows.empty?
       return rows.first
     ensure
-      Config.db.results_as_hash = results_as_hash
+      CoreConfig.db.results_as_hash = results_as_hash
+    end
+  end
+
+  def Core.get_repo_by_repo_name(repo_name)
+    results_as_hash = CoreConfig.db.results_as_hash
+    begin
+      CoreConfig.db.results_as_hash = true
+      rows = CoreConfig.db.execute("select * from repos where name = ?",
+        name)
+      return nil if rows.empty?
+      return rows.first
+    ensure
+      CoreConfig.db.results_as_hash = results_as_hash
     end
   end
 
   def Core.add_repos_to_db(repos, hash, issue_number)
-    Config.db.execute "insert into repos (name, pw_hash, issue_number) values (?,?,?)",
+    CoreConfig.db.execute "insert into repos (name, pw_hash, issue_number) values (?,?,?)",
       repos.sub(/https:\/\/github.com\//i, ""), hash, issue_number
   end
 
@@ -136,8 +150,8 @@ module Core
   end
 
   def Core.handle_post(request)
-    if Config.request_uri.nil?
-      Config.set_request_uri(request.env['REQUEST_URI'])
+    if CoreConfig.request_uri.nil?
+      CoreConfig.set_request_uri(request.env['REQUEST_URI'])
     end
     if Core.is_spoof? request
       puts "IP is not from github"
@@ -182,168 +196,227 @@ module Core
 
   def Core.handle_push(obj)
     puts "in handle_push"
-    # FIXME ignore pushes from repos that haven't set up an issue in
-    # our new packages repo. (We could post an issue in those repos
-    # if we want to make sure the package author sees it.)
-    return "handled push"
+    repos = obj['repository']['full_name']
+    unless Core.repo_exists? repos
+      return "Sorry, you haven't told us about this repository, please
+      go to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/new ."
+    end
+    db_record = get_repo_by_repo_name(repos)
+    issue_number = db_record['issue_number']
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    build_ok = false
+    labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+      map{|i| i.name}
+    if issue['state'] = "open" and labels.include? "ok_to_build"
+      build_ok = true
+    elsif issue['state'] = "closed" and labels.include? "testing"
+      build_ok = true
+    end
+    if build_ok
+      Core.start_build(repos, issue_number)
+      return "ok, starting build"
+    else
+      return "can't build unless issue is open and has the 'ok_to_build'
+      label, or is closed and has the 'testing' label."
+    end
+  end
+
+
+  def Core.handle_no_repos_url(issue_number, login)
+    comment= <<-END.unindent
+      Dear @#{login} ,
+      I couldn't find a GitHub repository URL in your issue text!
+      Please include a github repository URL, it should look like this:
+
+      https://github.com/username/reponame
+
+      I am closing this issue. Please try again with a new issue.
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    return "no github URL in new issue comment"
+  end
+
+
+  def Core.handle_multiple_urls(issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+      I found more than one GitHub URL in your issue! Please make sure there
+      is only one, it should look like:
+
+      https://github.com/username/reponame
+
+      I am closing this issue. Please try again with a new issue.
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    return "found multiple URLs in new issue comment"
+  end
+
+  def Core.repo_exists? (repos_url)
+    begin
+      repos = Octokit.repository(repos_url)
+      return true
+    rescue Octokit::NotFound
+      return false
+    end
+  end
+
+  def Core.handle_repo_does_not_exist(repos_url, issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+
+      There is no repository called https://github.com/#{repos_url} .
+      You must submit the url to a valid, public GitHub repository.
+      I am closing this issue. Please try again with a new issue.
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    return "repos does not exist"
+  end
+
+  def Core.has_description_file? (repos_url, obj)
+    repos = Octokit.repository(repos_url)
+    default_branch = repos['default_branch']
+    desc_url = "https://raw.githubusercontent.com/#{repos_url}/#{default_branch}/DESCRIPTION"
+    response = HTTParty.get(desc_url)
+    return response.code == 200
+  end
+
+  def Core.handle_no_description_file(full_repos_url, issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+      I could not find a DESCRIPTION file in the default branch of
+      the GitHub repository at
+      #{full_repos_url} .
+      This repository should contain an R package.
+
+      I am closing this issue. Please try again with a new issue.
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    return "no description file found!"
+  end
+
+  def Core.handle_preapproval(repos, issue_number, password)
+    recipient_email = CoreConfig.auth_config["email_recipient"]
+    recipient_name = CoreConfig.auth_config["email_recipient_name"]
+    from_email = "bioc-github-noreply@bioconductor.org"
+    from_name = "Bioconductor Issue Tracker"
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    msg = <<-END.unindent
+      Hi devteam,
+
+      Someone submitted a package to the tracker
+      (https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number})
+      and I'd like you to take a quick look at it before we let it into the
+      single package builder.
+
+      Just make sure that
+
+      1) it looks like a package that is intended for Bioconductor,
+      and not just one that is trying to use the single package builder
+      for free; and
+      2) It does not seem like a malicious package that will try to
+      cause damage to our build system. Don't check exhaustively
+      for this because there are many ways to hide badness.
+
+      The package is at the following github repository:
+
+      #{full_repos_url}
+
+      If you approve of it, please click the following link:
+
+      #{CoreConfig.request_uri}moderate_new_issue/#{issue_number}/approve/#{password}
+
+      To reject it, click here:
+
+      #{CoreConfig.request_uri}moderate_new_issue/#{issue_number}/reject/#{password}
+
+      Only one person needs to do this. The web page will
+      tell you if it has been done already.
+
+      After the package has been
+      approved (or rejected) once, the remaining steps will be handled
+      automatically.
+
+      The contributor will be told to read the guidelines and try again.
+      You can always post a more personalized message by going
+      to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+      You can then manually allow the package to be built by adding
+      the "ok_to_build" label to the issue. To manually reject the
+      issue, just close it.
+
+      Please don't reply to this email.
+
+      Thanks,
+      The Bioconductor/GitHub issue tracker.
+    END
+    Core.send_email("#{from_name} <#{from_email}>",
+      "#{recipient_name} <#{recipient_email}>",
+      "Action required: Please allow/reject new package submitted to tracker (issue ##{issue_number}: #{issue[:title]})",
+      msg)
   end
 
   def Core.handle_new_issue(obj)
     puts "got a new issue!"
+    login = obj['issue']['user']['login']
     body = obj['issue']['body']
     regex = %r{https://github.com/[^/]+/[^ /\s]+}
     match = body.scan(regex)
     issue_number = obj['issue']['number']
-    if match.empty?
-      comment= <<-END.unindent
-        I couldn't find a GitHub repository URL in your issue text!
-        Please include a github repository URL, it should look like this:
-
-        https://github.com/username/reponame
-
-        I am closing this issue. Please try again with a new issue.
-      END
-      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-      Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
-    elsif match.length > 1 # FIXME what if there is supposed to be more than
-                           # one package? As in software + data package?
-      comment = <<-END.unindent
-        I found more than one GitHub URL in your issue! Please make sure there
-        is only one, it should look like:
-
-        https://github.com/username/reponame
-
-        I am closing this issue. Please try again with a new issue.
-      END
-      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-      Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    if match.empty? # no github url present
+      return Core.handle_no_repos_url(issue_number, login)
+    elsif match.length > 1 # multiple github urls present
+      return Core.handle_multiple_urls(issue_number, login)
     else # there is just one URL
-      repos_url = match.first.sub("https://github.com/", "").strip
-      begin
-        repos = Octokit.repository(repos_url)
-      rescue Octokit::NotFound
-        comment = <<-END.unindent
-          No such repository!
-          There is no repository called #{match.first.strip} .
-          You must submit the url to a valid, public GitHub repository.
-          I am closing this issue. Please try again with a new issue.
-        END
-        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-        Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
-        return "return from invalid url"
+      full_repos_url = match.first.strip
+      repos_url = full_repos_url.sub("https://github.com/", "")
+      unless Core.repo_exists? (repos_url) # github url points to nonexistent repos
+        return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
       end
-      default_branch = repos['default_branch']
-      desc_url = "https://raw.githubusercontent.com/#{repos_url}/#{default_branch}/DESCRIPTION"
-      response = HTTParty.get(desc_url)
-      unless response.code == 200
-        comment = <<-END.unindent
-          I could not find a DESCRIPTION file in the default branch of
-          the GitHub repository at
-          #{match.first.strip} .
-          This repository should contain an R package.
-
-          I am closing this issue. Please try again with a new issue.
-        END
-        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-        Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
-        return "no description file found!"
+      unless Core.has_description_file? (repos_url)
+        return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
       # looking good so far....
-      # FIXME - make sure issue is not one that we are already tracking
-      # (at least in an open issue).
       # FIXME - also make sure it's not a repos in Bioconductor-mirror
       # or another one that we definitely know about referring
       # to a package that has already been accepted.
-      repos = match.first.strip
-      existing_issue_number = Core.get_repo_issue_number(repos)
+
+      existing_issue_number = Core.get_repo_issue_number(repos_url)
       if not existing_issue_number.nil?
-        return Core.handle_existing_issue(existing_issue_number, issue_number)
+        return Core.handle_existing_issue(existing_issue_number, issue_number, login)
       end
+
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
       Core.add_repos_to_db(repos, hash, issue_number)
-      require_preapproval = true
-      if require_preapproval
-        # FIXME change this to devteam-bioc@lists.fhcrc.org in production
-        # (from address is configured to be able to send email to devteam):
-        recipient_email = Config.auth_config["email_recipient"]
-        recipient_name = Config.auth_config["email_recipient_name"]
-        from_email = "bioc-github-noreply@bioconductor.org"
-        from_name = "Bioconductor Issue Tracker"
-        issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
-        msg = <<-END.unindent
-          Hi devteam,
-
-          Someone submitted a package to the tracker
-          (https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number})
-          and I'd like you to take a quick look at it before we let it into the
-          single package builder.
-
-          Just make sure that
-
-          1) it looks like a package that is intended for Bioconductor,
-          and not just one that is trying to use the single package builder
-          for free; and
-          2) It does not seem like a malicious package that will try to
-          cause damage to our build system. Don't check exhaustively
-          for this because there are many ways to hide badness.
-
-          The package is at the following github repository:
-
-          #{repos}
-
-          If you approve of it, please click the following link:
-
-          #{Config.request_uri}moderate_new_issue/#{issue_number}/approve/#{password}
-
-          To reject it, click here:
-
-          #{Config.request_uri}moderate_new_issue/#{issue_number}/reject/#{password}
-
-          Only one person needs to do this. The web page will
-          tell you if it has been done already.
-
-          After the package has been
-          approved (or rejected) once, the remaining steps will be handled
-          automatically.
-
-          The contributor will be told to read the guidelines and try again.
-          You can always post a more personalized message by going
-          to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
-          You can then manually allow the package to be built by adding
-          the "ok_to_build" label to the issue. To manually reject the
-          issue, just close it.
-
-          Please don't reply to this email.
-
-          Thanks,
-          The Bioconductor/GitHub issue tracker.
-        END
-        Core.send_email("#{from_name} <#{from_email}>",
-          "#{recipient_name} <#{recipient_email}>",
-          "Action required: Please allow/reject new package submitted to tracker (issue ##{issue_number}: #{issue[:title]})",
-          msg)
+      if REQUIRE_PREAPPROVAL
+        return Core.handle_preapproval(full_repos_url, issue_number, password)
       else
         comment = <<-END.unindent
-          Thanks! You submitted a single valid GitHub URL that points to
+          Thanks, @#{login} ! You submitted a single valid GitHub URL that points to
           an R package (at least it has a DESCRIPTION file).
 
           Your package is now submitted to our queue.
 
-          FIXME - add more info here about how to
-          add a push hook to your repos to build on subsequent
-          pushes....
+          **IMPORTANT**: Please read
+          [the instructions](../../blob/master/CONTRIBUTING.MD)
+          for setting up a push hook on your repository, or
+          further changes to your repository will NOT trigger a new
+          build.
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-        Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number, ["new-package"])
+        Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
+        ["new-package", "ok_to_build"])
+        Core.start_build(repos, issue_number)
       end
     end
-    puts "this is the body:\n #{body}"
     return "handled new issue"
   end
 
   def Core.send_email(from, to, subject, message)
-    aws = Config.auth_config['aws']
+    aws = CoreConfig.auth_config['aws']
     ses = Aws::SES::Client.new(
       region: aws['region'],
       access_key_id: aws['aws_access_key_id'],
@@ -393,11 +466,11 @@ module Core
     unless ['approve', 'reject'].include? action
       return "all i know how to do is approve and reject."
     end
-    issue = Octokit.issue(Config.auth_config['issue_repo'], issue_number)
+    issue = Octokit.issue(CoreConfig.auth_config['issue_repo'], issue_number)
     if issue['state'] == "closed"
       return("this issue has already been rejected (and closed).")
     end
-    labels = Octokit.labels_for_issue(Config.auth_config['issue_repo'], issue_number)
+    labels = Octokit.labels_for_issue(CoreConfig.auth_config['issue_repo'], issue_number)
     unless labels.find {|i| i.name == "ok_to_build"}
       return "this issue has already been marked 'ok_to_build'."
     end
@@ -416,13 +489,23 @@ module Core
 
         This issue will now be closed.
       END
-      Octokit.add_comment(Config.auth_config['issue_repo'], issue_number,
+      Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
-      Octokit.close_issue(Config.auth_config['issue_repo'], issue_number)
+      Octokit.close_issue(CoreConfig.auth_config['issue_repo'], issue_number)
       return "ok, issue rejected."
     else
+      comment= <<-END.unindent
+        Your package has been approved for building.
+        Your package is now submitted to our queue.
 
-      Octokit.add_labels_to_an_issue(Config.auth_config['issue_repo'],
+        **IMPORTANT**: Please read
+        [the instructions](../../blob/master/CONTRIBUTING.MD)
+        for setting up a push hook on your repository, or
+        further changes to your repository will NOT trigger a new
+        build.
+
+      END
+      Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, ["ok_to_build"])
       # FIXME  start a build!
       repos_url = "https://github.com/#{repos['name']}"
@@ -475,7 +558,7 @@ module Core
     obj['repository'] = 'scratch'
     json = obj.to_json
 
-    stomp = Config.auth_config['stomp']
+    stomp = CoreConfig.auth_config['stomp']
     stomp_hash = {hosts: [{host: stomp['broker'], port: stomp['port']}]}
     client = Stomp::Client.new(stomp_hash)
     client.publish("/topic/buildjobs", json)

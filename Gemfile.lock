@@ -2,6 +2,12 @@ GEM
   remote: https://rubygems.org/
   specs:
     addressable (2.3.8)
+    aws-sdk (2.2.19)
+      aws-sdk-resources (= 2.2.19)
+    aws-sdk-core (2.2.19)
+      jmespath (~> 1.0)
+    aws-sdk-resources (2.2.19)
+      aws-sdk-core (= 2.2.19)
     bcrypt (3.1.10)
     byebug (8.2.2)
     coderay (1.1.0)
@@ -10,6 +16,7 @@ GEM
     httparty (0.13.7)
       json (~> 1.8)
       multi_xml (>= 0.5.2)
+    jmespath (1.1.3)
     json (1.8.3)
     method_source (0.8.2)
     multi_xml (0.5.5)
@@ -44,6 +51,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  aws-sdk
   bcrypt
   httparty
   octokit
@@ -53,6 +61,3 @@ DEPENDENCIES
   sinatra
   sqlite3
   stomp
-
-BUNDLED WITH
-   1.10.6
