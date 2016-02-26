@@ -87,7 +87,8 @@ module Core
         id integer primary key,
         name varchar(255) unique not null,
         pw_hash varchar(255) not null,
-        issue_number integer not null
+        issue_number integer not null,
+        login varchar(255)
       );
     SQL
   end
@@ -563,6 +564,8 @@ module Core
 
   def Core.start_build(repos_url, issue_number)
     segs = repos_url.sub(/\/$|\.git$/, '').split('/')
+    repos_url = "https://github.com/" +
+      repos_url unless repos_url.downcase.start_with?("https://github.com")
     pkgname = segs.last
     now = Time.now
     tzname = now.zone
