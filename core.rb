@@ -125,9 +125,9 @@ module Core
     end
   end
 
-  def Core.add_repos_to_db(repos, hash, issue_number)
-    CoreConfig.db.execute "insert into repos (name, pw_hash, issue_number) values (?,?,?)",
-      repos.sub(/https:\/\/github.com\//i, ""), hash, issue_number
+  def Core.add_repos_to_db(repos, hash, issue_number, login)
+    CoreConfig.db.execute "insert into repos (name, pw_hash, issue_number, login) values (?,?,?,?)",
+      repos.sub(/https:\/\/github.com\//i, ""), hash, issue_number, login
   end
 
   def Core.is_spoof? (request)
@@ -419,7 +419,7 @@ module Core
 
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
-      Core.add_repos_to_db(repos_url, hash, issue_number)
+      Core.add_repos_to_db(repos_url, hash, issue_number, login)
       if REQUIRE_PREAPPROVAL
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
