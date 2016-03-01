@@ -75,9 +75,8 @@ module Core
 
   # FIXME - do authentication more often (on requests?) so it doesn't go stale?
   # Not sure yet if this is a problem.
-  Octokit.configure do |c|
-    c.access_token = auth_key
-  end
+
+  Core.authenticate
 
   dbfile = File.join(File.dirname(__FILE__), "db.sqlite3" )
   CoreConfig.set_db(SQLite3::Database.new dbfile)
@@ -212,6 +211,9 @@ module Core
 
   # When you want to close an issue, use this.
   def Core.close_issue(issue_number, issue=nil)
+    unless Core.is_authenticated?
+      dante
+    end
     unless issue.nil?
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
     end
@@ -596,6 +598,12 @@ module Core
     stomp_hash = {hosts: [{host: stomp['broker'], port: stomp['port']}]}
     client = Stomp::Client.new(stomp_hash)
     client.publish("/topic/buildjobs", json)
+  end
+
+  def Core.authenticate()
+    Octokit.configure do |c|
+      c.access_token = auth_key
+    end
   end
 
 end # end of Core module
