@@ -157,7 +157,7 @@ module Core
 
   def Core.handle_post(request)
     if CoreConfig.request_uri.nil?
-      CoreConfig.set_request_uri(request.env['REQUEST_URI'])
+      CoreConfig.set_request_uri(request.base_url)
     end
     if Core.is_spoof? request
       puts "IP is not from github"
