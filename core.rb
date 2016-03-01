@@ -219,7 +219,7 @@ module Core
     unless Core.is_authenticated?
       Core.authenticate
     end
-    unless issue.nil?
+    if issue.nil?
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
     end
     title = issue['title']
