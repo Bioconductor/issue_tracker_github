@@ -69,14 +69,19 @@ module Core
   NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
   REQUIRE_PREAPPROVAL = CoreConfig.auth_config['require_preapproval']
 
-  # A note about OAuth. When setting up the token, it must have
-  # the 'public_repo' scope
-  auth_key = CoreConfig.auth_config['auth_key']
-
   # FIXME - do authentication more often (on requests?) so it doesn't go stale?
   # Not sure yet if this is a problem.
 
-  Core.authenticate
+  # A note about OAuth. When setting up the token, it must have
+  # the 'public_repo' scope
+  def Core.authenticate()
+    Octokit.configure do |c|
+      c.access_token = CoreConfig.auth_config['auth_key']
+    end
+  end
+
+
+  Core.authenticate()
 
   dbfile = File.join(File.dirname(__FILE__), "db.sqlite3" )
   CoreConfig.set_db(SQLite3::Database.new dbfile)
@@ -212,7 +217,7 @@ module Core
   # When you want to close an issue, use this.
   def Core.close_issue(issue_number, issue=nil)
     unless Core.is_authenticated?
-      dante
+      Core.authenticate
     end
     unless issue.nil?
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
@@ -600,10 +605,5 @@ module Core
     client.publish("/topic/buildjobs", json)
   end
 
-  def Core.authenticate()
-    Octokit.configure do |c|
-      c.access_token = auth_key
-    end
-  end
 
 end # end of Core module
