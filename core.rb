@@ -144,6 +144,8 @@ module Core
     else
       ip = request.env['REMOTE_ADDR']
     end
+    return false if request.env.has_key? "HTTP_HOST" and
+      ["127.0.0.1", "localhost"].include? request.env['HTTP_HOST']
     return false if ip == "127.0.0.1" # allow local testing
     regex = %r{^192\.30\.25[2345]\.}
     ip !~ regex
