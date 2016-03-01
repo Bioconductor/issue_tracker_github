@@ -271,7 +271,7 @@ module Core
       I am closing this issue. Please try again with a new issue.
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Core.close_issue(Core::NEW_ISSUE_REPO, issue_number)
+    Core.close_issue(issue_number)
     return "no github URL in new issue comment"
   end
 
