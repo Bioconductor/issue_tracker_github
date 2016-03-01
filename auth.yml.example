@@ -1,6 +1,7 @@
 ---
 # github auth key:
 auth_key: abc1234
+require_preapproval: true
 issue_repo: someone/Contributions
 email_recipient: approvers@somewhere.org
 email_recipient_name: Ap Provers
