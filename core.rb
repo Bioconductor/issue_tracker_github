@@ -57,7 +57,7 @@ module Core
   # Also need to make sure that the repos has whatever
   # custom labels (defined on issues) that we make use
   # of in this script. So far they are:
-  #  - new-package
+  #  - new-package 'awaiting moderation'
   # Also, build system statuses (with appropriate colors):
   # OK WARNINGS TIMEOUT ERROR abnormal
   # See https://help.github.com/articles/creating-and-editing-labels-for-issues-and-pull-requests/
@@ -342,6 +342,8 @@ module Core
     from_email = "bioc-github-noreply@bioconductor.org"
     from_name = "Bioconductor Issue Tracker"
     issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
+      ['awaiting moderation'])
     msg = <<-END.unindent
       Hi devteam,
 
