@@ -220,7 +220,6 @@ module Core
       Core.authenticate
     end
     unless issue.nil?
-      raise "are we authenticated? #{Core.is_authenticated?}"
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
     end
     title = issue['title']
