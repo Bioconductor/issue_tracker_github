@@ -368,11 +368,11 @@ module Core
 
       If you approve of it, please click the following link:
 
-      #{CoreConfig.request_uri}moderate_new_issue/#{issue_number}/approve/#{password}
+      #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
 
       To reject it, click here:
 
-      #{CoreConfig.request_uri}moderate_new_issue/#{issue_number}/reject/#{password}
+      #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
 
       Only one person needs to do this. The web page will
       tell you if it has been done already.
