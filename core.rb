@@ -605,6 +605,11 @@ module Core
 
     stomp = CoreConfig.auth_config['stomp']
     stomp_hash = {hosts: [{host: stomp['broker'], port: stomp['port']}]}
+    # FIXME - if the broker is down or unreachable this will hang and make
+    # the approver wait forever. Think of a more transactional
+    # (everything succeeds or everything fails) approach, and this
+    # part should maybe be in a separate thread with a timeout of
+    # 5 seconds or so.
     client = Stomp::Client.new(stomp_hash)
     client.publish("/topic/buildjobs", json)
   end
