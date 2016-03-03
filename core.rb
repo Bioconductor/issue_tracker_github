@@ -581,6 +581,10 @@ module Core
       repos_url unless repos_url.downcase.start_with?("https://github.com")
     pkgname = segs.last
     now = Time.now
+    # FIXME this is NOT pacific time unless we explicitly
+    # set that time zone on the host. So we should force this
+    # to be pacific time (and eventually think about using
+    # either Eastern time or UTC throughout).
     tzname = now.zone
     if tzname == "PDT"
         offset = "0700"
