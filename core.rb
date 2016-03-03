@@ -73,7 +73,9 @@ module Core
   # Not sure yet if this is a problem.
 
   # A note about OAuth. When setting up the token, it must have
-  # the 'public_repo' scope
+  # the 'public_repo' scope (and when we are testing using a private
+  # repos, it must be an admin-level contributor to the repos, and have
+  # "repo" scope).
   def Core.authenticate()
     Octokit.configure do |c|
       c.access_token = CoreConfig.auth_config['auth_key']
