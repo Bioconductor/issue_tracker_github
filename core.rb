@@ -244,6 +244,12 @@ module Core
     end
     issue_number = db_record['issue_number']
     issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    repos_obj = Octokit.repos(repos)
+    default_branch = repos_obj['default_branch']
+    push_branch = obj['ref'].sub("refs/heads/", "")
+    unless push_branch == default_branch
+      return "ignoring push to #{push} branch, only interested in the default branch (#{default_branch})"
+    end
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
       map{|i| i.name}
@@ -253,6 +259,24 @@ module Core
       build_ok = true
     end
     if build_ok
+      # FIXME - this might cause too much noise (emails) in the issue,
+      # it would be better to show commit info in the same comment
+      # as the link to the build report. In order to do that, we have
+      # to persist the push info somehow and retrieve it when we are
+      # ready to post the build report (note that this is done from
+      # staging.bioconductor.org whereas this app runs on
+      # issues.bioconductor.org).
+      comment= "Received a valid push; starting a build. Commits are:\n\n"
+      for commit in obj['commits']
+        msg = commit['message'].gsub(/\n/, " ")
+        msg_display_len = 50
+        if msg.length > msg_display_len
+          msg = msg[0...msg_display_len] + "..."
+        end
+        comment += "[#{commit['id'][0...7]}](#{commit['url']}) #{msg}\n"
+      end
+
+
       Core.start_build(repos, issue_number)
       return "ok, starting build"
     else
