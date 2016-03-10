@@ -65,7 +65,7 @@ module Core
   CoreConfig.set_auth_config(YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" )))
 
 
-
+  GITHUB_URL_REGEX = %r{https://github.com/[^/]+/[^ /\s]+}
   NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
   REQUIRE_PREAPPROVAL = CoreConfig.auth_config['require_preapproval']
 
@@ -194,12 +194,82 @@ module Core
     # (such as experiment data packages) to be reviewed together
     # with the main package.
     # Be sure and ignore all comments posted by this bot itself.
-    return "handled issue comment"
+    login = obj['comment']['user']['login']
+    if login == Octokit.user.login
+      return "ignoring a comment that i made myself."
+    end
+    if login != obj['issue']['user']['login']
+      return "ignoring comment that's not from the creator of the issue."
+    end
+    comment = obj['comment']['body']
+    lines = comment.split("\n")
+    pkg_line = lines.detect{|i| i =~ /^AdditionalPackage: /}
+    if pkg_line.nil?
+      return "comment did not contain AdditionalPackage: tag"
+    end
+    match = pkg_line.scan(Core::GITHUB_URL_REGEX)
+    if match.empty?
+      return "no github URL in AdditionalPackage: line"
+    end
+    issue_state = obj['issue']['state']
+    labels = obj['issue']['labels'].map{|i| i['name']}
+    build_ok1 = (issue_state == "open" and labels.include? 'ok_to_build')
+    build_ok2 = (issue_state == "closed" and labels.include? 'testing')
+    issue_number = obj['issue']['number']
+    unless build_ok1 or build_ok2
+      msg =  "Can't build unless issue is open and 'ok_to_build' label is present, or issue is closed and 'testing' label is present."
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg)
+      return msg
+    end
+
+
+
+    full_repos_url = match.first.strip
+    repos_url = full_repos_url.sub("https://github.com/", "")
+    unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
+      return Core.handle_repo_does_not_exist(repos_url, issue_number, login,
+      close=false)
+    end
+    description = Core.get_description_file(repos_url)
+    if description.nil?
+      return Core.handle_no_description_file(full_repos_url, issue_number, login,
+        close=false)
+    end
+    existing_issue_number = Core.get_repo_issue_number(repos_url)
+    if not existing_issue_number.nil?
+      return Core.handle_existing_issue(existing_issue_number, issue_number, login,
+        close=false)
+    end
+
+    Core.add_repos_to_db(repos_url, "no_hash_needed", issue_number, login)
+    Core.start_build(repos_url, issue_number)
+    msg = "Starting build on additional package #{full_repos_url}."
+    msg_full= <<-END.unindent
+    Hi @#{login},
+
+    #{msg}
+
+    **IMPORTANT**: Please read
+    [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
+    for setting up a push hook on your repository, or
+    further changes to your additional package repository will NOT trigger a new
+    build.
+
+    The DESCRIPTION file of this additional package is:
+
+    ```
+    #{description}
+    ```
+
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg_full)
+    return msg
   end
 
-  # FIXME This checks if our DB already has a rowa with the same repos name.
+  # FIXME This checks if our DB already has a row with the same repos name.
   # We should also check if GitHub already has a repo with this name.
-  def Core.handle_existing_issue(existing_issue_number, issue_number, login)
+  def Core.handle_existing_issue(existing_issue_number, issue_number, login,
+      close=true)
     comment= <<-END.unindent
       Dear @#{login} ,
       You (or someone) has already posted that repository to our tracker.
@@ -208,11 +278,12 @@ module Core
 
       You cannot post the same repository more than once.
 
-      I am closing this issue.
-
     END
+    if close
+      comment += "I am closing this issue."
+      Core.close_issue(issue_number)
+    end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Core.close_issue(issue_number)
     return "duplicate issue"
   end
 
@@ -326,28 +397,42 @@ module Core
     end
   end
 
-  def Core.handle_repo_does_not_exist(repos_url, issue_number, login)
+  def Core.handle_repo_does_not_exist(repos_url, issue_number, login, close=true)
     comment = <<-END.unindent
       Dear @#{login} ,
 
       There is no repository called https://github.com/#{repos_url} .
       You must submit the url to a valid, public GitHub repository.
-      I am closing this issue. Please try again with a new issue.
     END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Core.close_issue(issue_number)
     return "repos does not exist"
   end
 
-  def Core.has_description_file? (repos_url, obj)
+  def Core.get_description_response(repos_url)
+    repos_url = repos_url.sub(/\.git$/, "")
     repos = Octokit.repository(repos_url)
     default_branch = repos['default_branch']
     desc_url = "https://raw.githubusercontent.com/#{repos_url}/#{default_branch}/DESCRIPTION"
-    response = HTTParty.get(desc_url)
+    return HTTParty.get(desc_url)
+  end
+
+  def Core.has_description_file?(repos_url)
+    response = Core.get_description_response(repos_url)
     return response.code == 200
   end
 
-  def Core.handle_no_description_file(full_repos_url, issue_number, login)
+  def Core.get_description_file(repos_url)
+    response = Core.get_description_response(repos_url)
+    return nil unless response.code == 200
+    return response.body
+  end
+
+  def Core.handle_no_description_file(full_repos_url, issue_number, login, close=true)
+    full_repos_url = full_repos_url.sub(/\.git$/, "")
     comment = <<-END.unindent
       Dear @#{login} ,
       I could not find a DESCRIPTION file in the default branch of
@@ -355,10 +440,12 @@ module Core
       #{full_repos_url} .
       This repository should contain an R package.
 
-      I am closing this issue. Please try again with a new issue.
     END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    Core.close_issue(issue_number)
     return "no description file found!"
   end
 
@@ -429,8 +516,7 @@ module Core
     puts "got a new issue!"
     login = obj['issue']['user']['login']
     body = obj['issue']['body']
-    regex = %r{https://github.com/[^/]+/[^ /\s]+}
-    match = body.scan(regex)
+    match = body.scan(Core::GITHUB_URL_REGEX)
     issue_number = obj['issue']['number']
     if match.empty? # no github url present
       return Core.handle_no_repos_url(issue_number, login)
@@ -442,7 +528,8 @@ module Core
       unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
         return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
       end
-      unless Core.has_description_file?(repos_url, obj)
+      description = Core.get_description_file(repos_url)
+      if description.nil?
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
       # looking good so far....
@@ -459,6 +546,19 @@ module Core
       hash = BCrypt::Password.create(password)
       Core.add_repos_to_db(repos_url, hash, issue_number, login)
       if REQUIRE_PREAPPROVAL
+        comment= <<-END.unindent
+          Hi @#{login}
+          Thanks for submitting your package. We are taking a quick
+          look at it and you will hear back from us soon.
+
+          The DESCRIPTION file for this package is:
+
+          ```
+          #{description}
+          ```
+
+        END
+        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
         comment = <<-END.unindent
@@ -472,6 +572,13 @@ module Core
           for setting up a push hook on your repository, or
           further changes to your repository will NOT trigger a new
           build.
+
+          The DESCRIPTION file of your package is:
+
+          ```
+          #{description}
+          ```
+
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
