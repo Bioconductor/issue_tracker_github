@@ -244,11 +244,11 @@ module Core
     end
     issue_number = db_record['issue_number']
     issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
-    repos_obj = Octokit.repos(repos)
+    repos_obj = Octokit.repository(repos)
     default_branch = repos_obj['default_branch']
     push_branch = obj['ref'].sub("refs/heads/", "")
     unless push_branch == default_branch
-      return "ignoring push to #{push} branch, only interested in the default branch (#{default_branch})"
+      return "ignoring push to #{push_branch} branch, only interested in the default branch (#{default_branch})"
     end
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
@@ -275,7 +275,7 @@ module Core
         end
         comment += "[#{commit['id'][0...7]}](#{commit['url']}) #{msg}\n"
       end
-
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
       Core.start_build(repos, issue_number)
       return "ok, starting build"
