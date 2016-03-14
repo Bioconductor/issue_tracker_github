@@ -679,6 +679,8 @@ module Core
         build.
 
       END
+      Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
+        comment)
       Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
         issue_number, 'awaiting moderation')
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
