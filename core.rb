@@ -249,18 +249,16 @@ module Core
 
     #{msg}
 
-    **IMPORTANT**: Please read
-    [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
-    for setting up a push hook on your repository, or
-    further changes to your additional package repository will NOT trigger a new
-    build.
+    **IMPORTANT**: Please read [the instructions][1] for setting up a
+    push hook on your repository, or further changes to your
+    additional package repository will NOT trigger a new build.
 
     The DESCRIPTION file of this additional package is:
 
     ```
     #{description}
     ```
-
+    [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg_full)
     return msg
@@ -272,12 +270,12 @@ module Core
       close=true)
     comment= <<-END.unindent
       Dear @#{login} ,
+
       You (or someone) has already posted that repository to our tracker.
 
       See https://github/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
 
       You cannot post the same repository more than once.
-
     END
     if close
       comment += "I am closing this issue."
@@ -360,6 +358,7 @@ module Core
   def Core.handle_no_repos_url(issue_number, login)
     comment= <<-END.unindent
       Dear @#{login} ,
+
       I couldn't find a GitHub repository URL in your issue text!
       Please include a github repository URL, it should look like this:
 
@@ -376,7 +375,8 @@ module Core
   def Core.handle_multiple_urls(issue_number, login)
     comment = <<-END.unindent
       Dear @#{login} ,
-      I found more than one GitHub URL in your issue! Please make sure there
+
+      I found more than one GitHub URL in your issue. Please make sure there
       is only one, it should look like:
 
       https://github.com/username/reponame
@@ -435,10 +435,10 @@ module Core
     full_repos_url = full_repos_url.sub(/\.git$/, "")
     comment = <<-END.unindent
       Dear @#{login} ,
-      I could not find a DESCRIPTION file in the default branch of
-      the GitHub repository at
-      #{full_repos_url} .
-      This repository should contain an R package.
+
+      I could not find a DESCRIPTION file in the default branch of the
+      GitHub repository at #{full_repos_url} . This repository should
+      contain an R package.
 
     END
     if close
@@ -460,20 +460,20 @@ module Core
     msg = <<-END.unindent
       Hi devteam,
 
-      Someone submitted a package to the tracker
-      with the title '#{issue['title']}'
-      (https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number})
-      and I'd like you to take a quick look at it before we let it into the
-      single package builder.
+      A package has been submitted a [new issue][1] to the tracker
+      with the title '#{issue['title']}' and I'd like you to take a
+      quick look at it before we let it into the single package
+      builder.
 
-      Just make sure that
+      Make sure that
 
-      1) it looks like a package that is intended for Bioconductor,
-      and not just one that is trying to use the single package builder
-      for free; and
-      2) It does not seem like a malicious package that will try to
-      cause damage to our build system. Don't check exhaustively
-      for this because there are many ways to hide badness.
+      1. It looks like a package that is intended for _Bioconductor_,
+         and not one that is trying to use the single package builder
+         for free; and
+
+      2. It does not seem like a malicious package that will try to
+         cause damage to our build system. Don't check exhaustively
+         for this because there are many ways to hide badness.
 
       The package is at the following github repository:
 
@@ -487,15 +487,14 @@ module Core
 
       #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
 
-      Only one person needs to do this. The web page will
-      tell you if it has been done already.
+      Only one person needs to do this. The web page will tell you if
+      it has been done already.
 
-      After the package has been
-      approved (or rejected) once, the remaining steps will be handled
-      automatically.
+      After the package has been approved (or rejected) once, the
+      remaining steps will be handled automatically.
 
-      The contributor will be told to read the guidelines and try again.
-      You can always post a more personalized message by going
+      The contributor will be told to read the guidelines and try
+      again.  You can always post a more personalized message by going
       to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
       You can then manually allow the package to be built by adding
       the "ok_to_build" label to the issue. To manually reject the
@@ -504,7 +503,10 @@ module Core
       Please don't reply to this email.
 
       Thanks,
+
       The Bioconductor/GitHub issue tracker.
+
+      [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
     END
     Core.send_email("#{from_name} <#{from_email}>",
       "#{recipient_name} <#{recipient_email}>",
@@ -548,6 +550,7 @@ module Core
       if REQUIRE_PREAPPROVAL
         comment= <<-END.unindent
           Hi @#{login}
+
           Thanks for submitting your package. We are taking a quick
           look at it and you will hear back from us soon.
 
@@ -562,23 +565,23 @@ module Core
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
         comment = <<-END.unindent
-          Thanks, @#{login} ! You submitted a single valid GitHub URL that points to
-          an R package (at least it has a DESCRIPTION file).
+          Thanks, @#{login} !
+
+          You submitted a single valid GitHub URL that points to an R
+          package (it has a DESCRIPTION file).
 
           Your package is now submitted to our queue.
 
-          **IMPORTANT**: Please read
-          [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
-          for setting up a push hook on your repository, or
-          further changes to your repository will NOT trigger a new
-          build.
+          **IMPORTANT**: Please read [the instructions][1] for setting
+          up a push hook on your repository, or further changes to
+          your repository will NOT trigger a new build.
 
           The DESCRIPTION file of your package is:
 
           ```
           #{description}
           ```
-
+          [1]: (https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
@@ -650,18 +653,19 @@ module Core
     end
     if action == "reject"
       comment= <<-END.unindent
-        This issue was deemed inappropriate for our issue tracker by
-        a member of the Bioconductor team.
+        This issue was deemed inappropriate for our issue tracker by a
+        member of the Bioconductor team.
 
-        This issue tracker is intended only for packages which are being
-        submitted for consideration by Bioconductor.
+        This issue tracker is intended only for packages which are
+        being submitted for consideration by Bioconductor.
 
-        Any other use of the tracker is not approved.
-        If you feel this designation is in error, please
-        email maintainer@bioconductor.org and include the URL
-        of this issue.
+        Any other use of the tracker is not approved.  If you feel
+        this designation is in error, please [send us email][1] and
+        include the URL of this issue.
 
         This issue will now be closed.
+
+        [1]: maintainer@bioconductor.org
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
@@ -669,15 +673,14 @@ module Core
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
-        Your package has been approved for building.
-        Your package is now submitted to our queue.
+        Your package has been approved for building.  Your package is
+        now submitted to our queue.
 
-        **IMPORTANT**: Please read
-        [the instructions](https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md#adding-a-web-hook)
-        for setting up a push hook on your repository, or
-        further changes to your repository will NOT trigger a new
-        build.
+        **IMPORTANT**: Please read [the instructions][1] for setting
+        up a push hook on your repository, or further changes to your
+        repository will NOT trigger a new build.
 
+        [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md#adding-a-web-hook
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
