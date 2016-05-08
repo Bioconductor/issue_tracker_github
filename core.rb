@@ -738,9 +738,9 @@ module Core
     obj['client_id'] = "single_package_builder_github:#{issue_number}:#{pkgname}"
     obj['force'] = true
     config_yaml = Core.get_bioc_config_yaml()
-    devel_version = config_yaml['devel_version']
+    devel_version = config_yaml['single_package_builder']['bioc_version']
     obj['bioc_version'] = devel_version
-    obj['r_version'] = config_yaml['r_ver_for_bioc_ver'][devel_version]
+    obj['r_version'] = config_yaml['single_package_builder']['r_version']
     obj['svn_url'] = repos_url
     obj['repository'] = 'scratch'
     json = obj.to_json
