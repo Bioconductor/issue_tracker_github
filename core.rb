@@ -586,11 +586,61 @@ module Core
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
         ["new-package", "ok_to_build"])
+        assignee = Core.get_issue_assignee(issue_number)
+        unless assignee.nil?
+          Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
+        end
         Core.start_build(repos_url, issue_number)
       end
     end
     return "handled new issue"
   end
+
+  def Core.get_issue_assignee(issue_number)
+    issue_number = issue_number.to_i # necessary?
+    # The ID for the 'Core' team should not change, but if it does you can look up
+    # teams with
+    # Octokit.organization_teams("Bioconductor")
+    team_number = CoreConfig.auth_config['reviewer_team_number']
+    mems = Octokit.team_members(team_number)
+    logins = mems.map{|i| i[:login]}.sort # i think they are already sorted, but...
+    # if this is issue #1 it's a special case:
+    if issue_number == 1
+      return logins.first
+    end
+    # find the previous issue and see who it was assigned to.
+    # it's possible there is more than one unassigned
+    # so look up all issues, sorted by creation (ascending):
+    issues = Octokit.issues(Core::NEW_ISSUE_REPO, {sort: 'created',
+      direction:'desc', state: 'all'})
+    last_issue_assignee = nil
+    # just in case this issue has already been assigned, don't change the assignee:
+    this_issue = issues.find{|i| i[:number] == issue_number}
+    if (!this_issue.nil?) and (!this_issue[:assignee].nil?)
+      return nil # signal the caller not to change assignee
+    end
+
+    for issue in issues
+      next if issue[:number] > issue_number
+      next if issue[:assignee].nil?
+      last_issue_assignee = issue[:assignee][:login]
+      break
+    end
+    if last_issue_assignee.nil? # no issues were assigned
+      return logins.first
+    end
+    memhash = {}
+    logins.each_with_index do |login, i|
+      memhash[login] = i
+    end
+    last_issue_index = memhash[last_issue_assignee]
+    if last_issue_index == (logins.length() -1)
+      return logins.first
+    else
+      return logins[last_issue_index + 1]
+    end
+  end
+
 
   def Core.send_email(from, to, subject, message)
     aws = CoreConfig.auth_config['aws']
@@ -690,6 +740,10 @@ module Core
         issue_number, ["ok_to_build"])
       # FIXME  start a build!
       repos_url = "https://github.com/#{repos['name']}"
+      assignee = Core.get_issue_assignee(issue_number)
+      unless assignee.nil?
+        Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
+      end
       Core.start_build(repos_url, issue_number)
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
