@@ -319,6 +319,28 @@ module Core
     unless push_branch == default_branch
       return "ignoring push to #{push_branch} branch, only interested in the default branch (#{default_branch})"
     end
+    # FIXME - make sure package version number has bumped since the last push
+    # You can do this by examining the push object to get the SHAs for 'before'
+    # and 'after', then use these to compare the two commits like this:
+    # comp = Octokit.compare("dtenenba/spbtest",
+    #  "3150731e414d1a2948a4fb97ceee7cdba8aa36f9", # before
+    #  "b9587f49ad0ecca23064872cd0843cde26cd7a64") # after
+    # comp[:files] should include an item where :filename == "DESCRIPTION"
+    # comp[:files] may be empty (but not nil I guess)
+    # desc = comp[:files].find{|i| i[:filename] == "DESCRIPTION"}
+    # if that's nil, tell them we are not going to start a build (and why we're not)
+    # the actual patch is in desc[:patch]
+    # From here we can use logic similar to that in
+    # https://github.com/Bioconductor/DESCRIPTION_hook/blob/master/check_for_bad_version.py
+    # (but not as complex)
+    # make sure we deal with winblows line endings
+    # make sure we handle the case where the DESCRIPTION file is removed
+    # (there are - lines in the patch but no + lines)
+    # what if the DESCRIPTION file is removed in one push but then re-added in
+    # another? Harder to tell if it's bumped, maybe just give the benefit of the doubt in this case.
+    # to make sure there was a version bump
+    # if there was a bump, we're ok to build, otherwise not, let the user know
+
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
       map{|i| i.name}
