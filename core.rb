@@ -24,6 +24,18 @@ class CoreConfig
   @@request_uri  = nil
   @@db = nil
   @@auth_config = nil
+  @@labels = {
+    AWAITING_MODERATION_LABEL: "1. awaiting moderation",
+    REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
+    ACCEPTED_LABEL: "3. accepted",
+    DECLINED_LABEL: "3b. declined",
+    ABNORMAL_LABEL: "ABNORMAL",
+    ERROR_LABEL: "ERROR",
+    OK_LABEL: "OK",
+    TIMEOUT_LABEL: "TIMEOUT",
+    WARNINGS_LABEL: "WARNINGS",
+    TESTING_LABEL: "TESTING"
+  }
   def self.set_request_uri(request_uri)
     @@request_uri = request_uri
   end
@@ -42,6 +54,9 @@ class CoreConfig
   def self.auth_config
     @@auth_config
   end
+  def self.labels
+    @@labels
+  end
 end
 
 
@@ -56,10 +71,8 @@ module Core
   # notifications.
   # Also need to make sure that the repos has whatever
   # custom labels (defined on issues) that we make use
-  # of in this script. So far they are:
-  #  - new-package 'awaiting moderation'
-  # Also, build system statuses (with appropriate colors):
-  # OK WARNINGS TIMEOUT ERROR abnormal
+  # of in this script.
+  # (See CoreConfig.labels definition)
   # See https://help.github.com/articles/creating-and-editing-labels-for-issues-and-pull-requests/
 
   CoreConfig.set_auth_config(YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" )))
@@ -180,8 +193,6 @@ module Core
       puts "got a request from #{obj['repository']['full_name']}, not the one we like."
       return "ignoring issue from other repo"
     end
-    # FIXME allow people to continue to build (closed?) issues
-    # if they have the label "testing".
     if obj.has_key? 'action' and  obj['action'] == "opened"
       return Core.handle_new_issue(obj)
     end
@@ -213,11 +224,13 @@ module Core
     end
     issue_state = obj['issue']['state']
     labels = obj['issue']['labels'].map{|i| i['name']}
-    build_ok1 = (issue_state == "open" and labels.include? 'ok_to_build')
-    build_ok2 = (issue_state == "closed" and labels.include? 'testing')
+    build_ok1 = (issue_state == "open" and
+      labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
+    build_ok2 = (issue_state == "closed" and
+      labels.include? CoreConfig.labels[:TESTING_LABEL])
     issue_number = obj['issue']['number']
     unless build_ok1 or build_ok2
-      msg =  "Can't build unless issue is open and 'ok_to_build' label is present, or issue is closed and 'testing' label is present."
+      msg =  "Can't build unless issue is open and '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}' label is present, or issue is closed and '#{CoreConfig.labels[:TESTING_LABEL]}' label is present."
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg)
       return msg
     end
@@ -344,9 +357,9 @@ module Core
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
       map{|i| i.name}
-    if issue['state'] = "open" and labels.include? "ok_to_build"
+    if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
       build_ok = true
-    elsif issue['state'] = "closed" and labels.include? "testing"
+    elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
       build_ok = true
     end
     if build_ok
@@ -371,8 +384,8 @@ module Core
       Core.start_build(repos, issue_number)
       return "ok, starting build"
     else
-      return "can't build unless issue is open and has the 'ok_to_build'
-      label, or is closed and has the 'testing' label."
+      return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
+      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
     end
   end
 
@@ -478,7 +491,7 @@ module Core
     from_name = "Bioconductor Issue Tracker"
     issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
     Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
-      ['awaiting moderation'])
+      [CoreConfig.labels[:AWAITING_MODERATION_LABEL]])
     msg = <<-END.unindent
       Hi devteam,
 
@@ -519,7 +532,7 @@ module Core
       again.  You can always post a more personalized message by going
       to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
       You can then manually allow the package to be built by adding
-      the "ok_to_build" label to the issue. To manually reject the
+      the "#{CoreConfig.labels[:AWAITING_MODERATION_LABEL]}" label to the issue. To manually reject the
       issue, just close it.
 
       Please don't reply to this email.
@@ -607,7 +620,7 @@ module Core
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
-        ["new-package", "ok_to_build"])
+          [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
         assignee = Core.get_issue_assignee(issue_number)
         unless assignee.nil?
           Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
@@ -720,8 +733,8 @@ module Core
       return("this issue has already been rejected (and closed).")
     end
     labels = Octokit.labels_for_issue(CoreConfig.auth_config['issue_repo'], issue_number)
-    if labels.find {|i| i.name == "ok_to_build"}
-      return "this issue has already been marked 'ok_to_build'."
+    if labels.find {|i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}
+      return "this issue has already been marked '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'."
     end
     if action == "reject"
       comment= <<-END.unindent
@@ -757,9 +770,9 @@ module Core
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
       Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
-        issue_number, 'awaiting moderation')
+        issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
-        issue_number, ["ok_to_build"])
+        issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
       # FIXME  start a build!
       repos_url = "https://github.com/#{repos['name']}"
       assignee = Core.get_issue_assignee(issue_number)
