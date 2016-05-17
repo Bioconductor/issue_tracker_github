@@ -581,6 +581,22 @@ module Core
     end
   end
 
+  def Core.handle_bioconductor_mirror_repo(issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+
+      Sorry, we don't build packages in the `Bioconductor-mirror`
+      organization. These packages have already been accepted
+      into _Bioconductor_.
+
+      This issue will now be closed.
+    END
+    Core.close_issue(issue_number)
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "Won't build repos in the Bioconductor-mirror organization."
+  end
+
+
   def Core.handle_repo_does_not_exist(repos_url, issue_number, login, close=true)
     comment = <<-END.unindent
       Dear @#{login} ,
@@ -713,6 +729,9 @@ module Core
       repos_url = full_repos_url.sub("https://github.com/", "")
       unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
         return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
+      end
+      if repos_url.start_with? "Bioconductor-mirror"
+        return Core.handle_bioconductor_mirror_repo(issue_number, login)
       end
       description = Core.get_description_file(repos_url)
       if description.nil?
