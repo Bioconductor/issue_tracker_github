@@ -94,7 +94,7 @@ class CoreConfig
   @@labels = {
     AWAITING_MODERATION_LABEL: "1. awaiting moderation",
     REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
-    ACCEPTED_LABEL: "3. accepted",
+    ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
     ABNORMAL_LABEL: "ABNORMAL",
     ERROR_LABEL: "ERROR",
@@ -256,6 +256,9 @@ module Core
     if obj.has_key? 'action' and obj['action'] == "created"
       return Core.handle_issue_comment(obj)
     end
+    if obj.has_key? 'action' and obj['action'] == "labeled"
+      return Core.handle_issue_label_added(obj)
+    end
     if obj['repository']['full_name'] != Core::NEW_ISSUE_REPO
       puts "got a request from #{obj['repository']['full_name']}, not the one we like."
       return "ignoring issue from other repo"
@@ -382,6 +385,53 @@ module Core
     # This should be the only place where Octokit.close_issue is called directly.
     Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
   end
+
+  def Core.handle_issue_label_added(obj)
+    #dante
+    login = obj['issue']['user']['login']
+    if login == Octokit.user.login
+      return "ignoring a comment that i made myself."
+    end
+    if obj["label"]["name"] == CoreConfig.labels[:ACCEPTED_LABEL]
+      package_repos =
+        obj['issue']['body'].split("\r\n").find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "")
+      issue_number = obj['issue']['number']
+      package = obj['issue']['title']
+      recipient_email = CoreConfig.auth_config["email_recipient"]
+      recipient_name = CoreConfig.auth_config["email_recipient_name"]
+      from_email = "bioc-github-noreply@bioconductor.org"
+      from_name = "Bioconductor Issue Tracker"
+      subject = "Package #{package} (issue #{issue_number}) has been accepted."
+      message= <<-END.unindent
+        Dear Bioconductor package administrator,
+
+        The package reviewer #{login} has marked the package
+        '#{package}' as accepted.
+
+        Please add this package to version control. (In future this may be automated.)
+
+        The issue where the package was reviewed is here:
+
+        https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+
+        The package source code is here:
+
+        #{package_repos}
+
+        Thanks,
+
+        #{Octokit.user.login}
+
+      END
+      Core.send_email("#{from_name} <#{from_email}>",
+        "#{recipient_name} <#{recipient_email}>",
+        subject,
+        message)
+      return "ok, emailed package administrator"
+    end
+    return "okey-dokey"
+  end
+
 
   def Core.handle_push(obj)
     puts "in handle_push"
