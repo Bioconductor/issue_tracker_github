@@ -11,6 +11,10 @@ require 'stomp'
 require 'open-uri'
 require 'pry' # remove this when not needed
 
+# When testing, there should be a stomp (rabbitmq) broker running, like so:
+# sudo docker run -d -e RABBITMQ_NODENAME=my-rabbit --name rabbitmq -p 61613:61613 resilva87/docker-rabbitmq-stomp
+
+
 class String
   # Strip leading whitespace from each line that is the same as the
   # amount of whitespace on the first line of the string.
@@ -19,6 +23,69 @@ class String
     gsub(/^#{self[/\A[ \t]*/]}/,'')
   end
 end
+
+class InvalidSegmentNumberError < StandardError; end
+class InvalidCharacterError < StandardError; end
+
+class BiocVersion
+  @x = 0
+  @y = 0
+  @z = 0
+  attr_reader :x, :y, :z
+
+  def initialize(version_string)
+    segs = version_string.strip.split('.')
+    unless segs.length == 3
+      raise InvalidSegmentNumberError
+    end
+    for seg in segs
+      fail = false
+      if seg.include? '-'
+        fail = true
+      end
+      begin
+        Integer(seg)
+      rescue
+        fail = true
+      end
+      if fail
+        raise InvalidCharacterError
+      end
+    end
+    @x = Integer(segs[0])
+    @y = Integer(segs[1])
+    @z = Integer(segs[2])
+  end
+
+  def compare(other)
+    if @x > other.x
+      return 1
+    end
+    if @x < other.x
+      return -1
+    end
+    if @x == other.x
+      if @y > other.y
+        return 1
+      end
+      if @y < other.y
+        return -1
+      end
+      if @y == other.y
+        if @z > other.z
+          return 1
+        end
+        if @z < other.z
+          return -1
+        end
+        return 0
+      end
+    end
+
+  end
+
+end
+
 
 class CoreConfig
   @@request_uri  = nil
@@ -332,27 +399,6 @@ module Core
     unless push_branch == default_branch
       return "ignoring push to #{push_branch} branch, only interested in the default branch (#{default_branch})"
     end
-    # FIXME - make sure package version number has bumped since the last push
-    # You can do this by examining the push object to get the SHAs for 'before'
-    # and 'after', then use these to compare the two commits like this:
-    # comp = Octokit.compare("dtenenba/spbtest",
-    #  "3150731e414d1a2948a4fb97ceee7cdba8aa36f9", # before
-    #  "b9587f49ad0ecca23064872cd0843cde26cd7a64") # after
-    # comp[:files] should include an item where :filename == "DESCRIPTION"
-    # comp[:files] may be empty (but not nil I guess)
-    # desc = comp[:files].find{|i| i[:filename] == "DESCRIPTION"}
-    # if that's nil, tell them we are not going to start a build (and why we're not)
-    # the actual patch is in desc[:patch]
-    # From here we can use logic similar to that in
-    # https://github.com/Bioconductor/DESCRIPTION_hook/blob/master/check_for_bad_version.py
-    # (but not as complex)
-    # make sure we deal with winblows line endings
-    # make sure we handle the case where the DESCRIPTION file is removed
-    # (there are - lines in the patch but no + lines)
-    # what if the DESCRIPTION file is removed in one push but then re-added in
-    # another? Harder to tell if it's bumped, maybe just give the benefit of the doubt in this case.
-    # to make sure there was a version bump
-    # if there was a bump, we're ok to build, otherwise not, let the user know
 
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
@@ -363,6 +409,27 @@ module Core
       build_ok = true
     end
     if build_ok
+      unless Core.version_has_bumped? obj
+        comment= <<-END.unindent
+          We only start builds when the `Version` field in the `DESCRIPTION`
+          file is incremented. For example, by changing
+
+              Version: 0.99.0
+
+          to
+
+              Version 0.99.1
+
+          If you did not intend to start a build, you don't need to
+          do anything. If you did want to start a build, increment
+          the `Version:` field and try again.
+        END
+        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+
+        return "Not building without a version bump."
+      end
+
+
       # FIXME - this might cause too much noise (emails) in the issue,
       # it would be better to show commit info in the same comment
       # as the link to the build report. In order to do that, we have
@@ -389,6 +456,33 @@ module Core
     end
   end
 
+  def Core.version_has_bumped? (push_obj)
+      repos = push_obj['repository']['full_name']
+      before = push_obj['before']
+      after = push_obj['after']
+      comp = Octokit.compare(repos, before, after)
+      desc = comp[:files].find{|i| i[:filename] == "DESCRIPTION"}
+      return false if desc.nil?
+      return Core.does_patch_have_version_bump? (desc[:patch])
+  end
+
+  def Core.does_patch_have_version_bump? (patch)
+    lines = patch.split /\r|\n|\r\n/
+    lines.reject! {|i| i.empty? }
+    oldversion = lines.find {|i| i.start_with? "-Version:"}
+    return false if oldversion.nil?
+    oldversion = oldversion.sub("-Version:", "").strip
+    newversion = lines.find {|i| i.start_with? "+Version:"}
+    return false if newversion.nil?
+    newversion = newversion.sub("+Version:", "").strip
+    begin
+      old_v = BiocVersion.new(oldversion)
+      new_v = BiocVersion.new(newversion)
+    rescue
+      return false
+    end
+    return (new_v.compare(old_v) == 1)
+  end
 
   def Core.handle_no_repos_url(issue_number, login)
     comment= <<-END.unindent
