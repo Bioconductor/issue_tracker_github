@@ -387,15 +387,14 @@ module Core
   end
 
   def Core.handle_issue_label_added(obj)
-    #dante
     login = obj['issue']['user']['login']
     if login == Octokit.user.login
       return "ignoring a comment that i made myself."
     end
+    issue_number = obj['issue']['number']
     if obj["label"]["name"] == CoreConfig.labels[:ACCEPTED_LABEL]
       package_repos =
         obj['issue']['body'].split("\r\n").find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "")
-      issue_number = obj['issue']['number']
       package = obj['issue']['title']
       recipient_email = CoreConfig.auth_config["email_recipient"]
       recipient_name = CoreConfig.auth_config["email_recipient_name"]
@@ -414,6 +413,8 @@ module Core
 
         https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
 
+        (I'm closing that issue.)
+
         The package source code is here:
 
         #{package_repos}
@@ -423,11 +424,15 @@ module Core
         #{Octokit.user.login}
 
       END
+      Core.close_issue(issue_number)
       Core.send_email("#{from_name} <#{from_email}>",
         "#{recipient_name} <#{recipient_email}>",
         subject,
         message)
       return "ok, emailed package administrator"
+    elsif obj['label']['name'] == CoreConfig.labels[:DECLINED_LABEL]
+      Core.close_issue(issue_number)
+      return "package was declined, closing issue"
     end
     return "okey-dokey"
   end
