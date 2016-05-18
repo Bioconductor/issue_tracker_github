@@ -413,8 +413,6 @@ module Core
 
         https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
 
-        (I'm closing that issue.)
-
         The package source code is here:
 
         #{package_repos}
@@ -424,7 +422,7 @@ module Core
         #{Octokit.user.login}
 
       END
-      Core.close_issue(issue_number)
+
       Core.send_email("#{from_name} <#{from_email}>",
         "#{recipient_name} <#{recipient_email}>",
         subject,
