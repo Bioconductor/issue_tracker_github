@@ -803,7 +803,8 @@ module Core
     # teams with
     # Octokit.organization_teams("Bioconductor")
     team_number = CoreConfig.auth_config['reviewer_team_number']
-    mems = Octokit.team_members(team_number)
+    mems = Octokit.team_members(team_number).
+           delete_if{|x| x[:login] == 'dtenenba'} # FIXME: temporary
     logins = mems.map{|i| i[:login]}.sort # i think they are already sorted, but...
     # if this is issue #1 it's a special case:
     if issue_number == 1
@@ -822,7 +823,7 @@ module Core
     end
 
     for issue in issues
-      next if issue[:number] > issue_number
+      next if issue[:number] >= issue_number
       next if issue[:assignee].nil?
       last_issue_assignee = issue[:assignee][:login]
       break
