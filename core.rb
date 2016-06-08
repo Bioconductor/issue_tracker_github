@@ -647,6 +647,28 @@ module Core
     return "no description file found!"
   end
 
+  def Core.handle_package_name_mismatch(repos_url, package_name,
+        issue_number, login, close=true)
+    repos_package_name = repos_url.split('/').last
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package repository name, '@#{repos_package_name}', differs
+      from the package name in the DESCRIPTION file, '@#{package_name}'.
+
+      Please rename your repository, and submit a new
+      issue. Alternatively, change the Package: field in the
+      DESCRIPTION file to match the name of the repository.
+
+    END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "DESCRIPTION and issue package name differ!"
+  end
+
   def Core.handle_preapproval(repos, issue_number, password)
     recipient_email = CoreConfig.auth_config["email_recipient"]
     recipient_name = CoreConfig.auth_config["email_recipient_name"]
@@ -734,6 +756,11 @@ module Core
       description = Core.get_description_file(repos_url)
       if description.nil?
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
+      end
+      package_name = description.scan(/^Package: *(.+)/).first.first
+      unless repos_url.split("/").last == package_name
+        return Core.handle_package_name_mismatch( repos_url,
+                 package_name, issue_number, login)
       end
       # looking good so far....
       # FIXME - also make sure it's not a repos in Bioconductor-mirror
