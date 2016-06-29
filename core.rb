@@ -653,8 +653,8 @@ module Core
     comment = <<-END.unindent
       Dear @#{login},
 
-      The package repository name, '@#{repos_package_name}', differs
-      from the package name in the DESCRIPTION file, '@#{package_name}'.
+      The package repository name, '#{repos_package_name}', differs
+      from the package name in the DESCRIPTION file, '#{package_name}'.
 
       Please rename your repository, and submit a new
       issue. Alternatively, change the Package: field in the
@@ -757,7 +757,7 @@ module Core
       if description.nil?
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
-      package_name = description.scan(/^Package: *(.+)/).first.first
+      package_name = description.scan(/^Package: *(.+)/).first.first.strip
       unless repos_url.split("/").last == package_name
         return Core.handle_package_name_mismatch( repos_url,
                  package_name, issue_number, login)
