@@ -830,7 +830,8 @@ module Core
     # teams with
     # Octokit.organization_teams("Bioconductor")
     team_number = CoreConfig.auth_config['reviewer_team_number']
-    mems = Octokit.team_members(team_number)
+    mems = Octokit.team_members(team_number).
+           delete_if{|x| x[:login] == 'gr22772'}
     logins = mems.map{|i| i[:login]}.sort # i think they are already sorted, but...
     # if this is issue #1 it's a special case:
     if issue_number == 1
