@@ -991,7 +991,7 @@ module Core
 
 
   def Core.get_bioc_config_yaml()
-    yaml_content = open("http://bioconductor.org/config.yaml"){|f| f.read}
+    yaml_content = open("http://master.bioconductor.org/config.yaml"){|f| f.read}
     YAML::load(yaml_content)
   end
 
