@@ -247,7 +247,7 @@ module Core
     end
     json = request.body.read
     obj = JSON.parse json
-    if (!obj.has_key?'action') and (!obj.has_key?'ref')
+    if (!obj.has_key? 'action') and (!obj.has_key? 'ref')
       return 'I can only handle push and issue (and issue comment)event hooks'
     end
     if obj.has_key? 'ref'
@@ -407,7 +407,7 @@ module Core
         The package reviewer #{login} has marked the package
         '#{package}' as accepted.
 
-        Please add this package to version control. (In future this may be automated.)
+        Please add this package to version control.
 
         The issue where the package was reviewed is here:
 
@@ -680,9 +680,12 @@ module Core
     msg = <<-END.unindent
       Hi devteam,
 
-      A package has been submitted a [new issue][1] to the tracker
-      with the title '#{issue['title']}' and I'd like you to take a
-      quick look at it before we let it into the single package
+      Repository: https://github.com/#{repos}
+      Issue:  https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+
+      A github repository has been submitted as a new issue to the
+      tracker with the title '#{issue['title']}' and I'd like you to
+      take a quick look at it before we let it into the single package
       builder.
 
       Make sure that
@@ -695,17 +698,10 @@ module Core
          cause damage to our build system. Don't check exhaustively
          for this because there are many ways to hide badness.
 
-      The package is at the following github repository:
+      Please approve or reject the package.
 
-      https://github.com/#{repos}
-
-      If you approve of it, please click the following link:
-
-      #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
-
-      To reject it, click here:
-
-      #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
+      Approve: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
+      Reject: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
 
       Only one person needs to do this. The web page will tell you if
       it has been done already.
@@ -715,18 +711,16 @@ module Core
 
       The contributor will be told to read the guidelines and try
       again.  You can always post a more personalized message by going
-      to https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
-      You can then manually allow the package to be built by adding
-      the "#{CoreConfig.labels[:AWAITING_MODERATION_LABEL]}" label to the issue. To manually reject the
-      issue, just close it.
+      to the issue.  You can then manually allow the package to
+      be built by adding the
+      "#{CoreConfig.labels[:AWAITING_MODERATION_LABEL]}" label to the
+      issue. To manually reject the issue, just close it.
 
       Please don't reply to this email.
 
       Thanks,
 
       The Bioconductor/GitHub issue tracker.
-
-      [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
     END
     Core.send_email("#{from_name} <#{from_email}>",
       "#{recipient_name} <#{recipient_email}>",
@@ -798,7 +792,8 @@ module Core
           You submitted a single valid GitHub URL that points to an R
           package (it has a DESCRIPTION file).
 
-          Your package is now submitted to our queue.
+          A reviewer has been assigned, and your package will be
+          processed by them.
 
           **IMPORTANT**: Please read [the instructions][1] for setting
           up a push hook on your repository, or further changes to
@@ -974,6 +969,7 @@ module Core
         Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
       end
       Core.start_build(repos_url, issue_number)
+      # FIXME return to github issue, rather than text string
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
     return "ok so far"
