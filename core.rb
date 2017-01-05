@@ -356,7 +356,7 @@ module Core
 
       You (or someone) has already posted that repository to our tracker.
 
-      See https://github/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
+      See https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
 
       You cannot post the same repository more than once.
     END
@@ -432,7 +432,7 @@ module Core
       Core.close_issue(issue_number)
       return "package was declined, closing issue"
     end
-    return "okey-dokey"
+    return "handle_issue_label_added"
   end
 
 
