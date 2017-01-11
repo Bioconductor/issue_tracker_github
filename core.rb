@@ -682,6 +682,9 @@ module Core
 
       Repository: https://github.com/#{repos}
       Issue:  https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+      Approve: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
+
+      Reject: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
 
       A github repository has been submitted as a new issue to the
       tracker with the title '#{issue['title']}' and I'd like you to
@@ -699,9 +702,6 @@ module Core
          for this because there are many ways to hide badness.
 
       Please approve or reject the package.
-
-      Approve: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
-      Reject: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
 
       Only one person needs to do this. The web page will tell you if
       it has been done already.
