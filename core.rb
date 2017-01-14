@@ -96,11 +96,15 @@ class CoreConfig
     REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
+
+    VERSION_BUMP_LABEL: "VERSION BUMP REQUIRED",
+
     ABNORMAL_LABEL: "ABNORMAL",
     ERROR_LABEL: "ERROR",
     OK_LABEL: "OK",
     TIMEOUT_LABEL: "TIMEOUT",
     WARNINGS_LABEL: "WARNINGS",
+
     TESTING_LABEL: "TESTING"
   }
   def self.set_request_uri(request_uri)
@@ -462,26 +466,26 @@ module Core
       build_ok = true
     end
     if build_ok
+      labels = Octokit.labels_for_issue(
+        CoreConfig.auth_config['issue_repo'], issue_number)
+      has_version_bump_label = labels.find {
+        |i| i.name == CoreConfig.labels[:VERSION_BUMP_LABEL]
+      }
+
       unless Core.version_has_bumped? obj
-        comment= <<-END.unindent
-          We only start builds when the `Version` field in the `DESCRIPTION`
-          file is incremented. For example, by changing
-
-              Version: 0.99.0
-
-          to
-
-              Version 0.99.1
-
-          If you did not intend to start a build, you don't need to
-          do anything. If you did want to start a build, increment
-          the `Version:` field and try again.
-        END
-        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-
-        return "Not building without a version bump."
+        if not has_version_bump_label
+          Octokit.add_labels_to_an_issue(
+            CoreConfig.auth_config['issue_repo'], issue_number,
+            [CoreConfig.labels[:VERSION_BUMP_LABEL]])
+        end
+        return "version bump required"
       end
 
+      if has_version_bump_label
+        Octokit.remove_label(
+          CoreConfig.auth_config['issue_repo'], issue_number,
+          CoreConfig.labels[:VERSION_BUMP_LABEL])
+      end
 
       # FIXME - this might cause too much noise (emails) in the issue,
       # it would be better to show commit info in the same comment
@@ -502,7 +506,7 @@ module Core
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
       Core.start_build(repos, issue_number)
-      return "ok, starting build"
+      return "OK starting build"
     else
       return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
