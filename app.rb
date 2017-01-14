@@ -3,7 +3,7 @@ require_relative './core'
 require 'pry' # remove when not needed
 
 get '/' do
-  'nothing to see here yet'
+  'Nothing to see here'
 end
 
 post '/' do

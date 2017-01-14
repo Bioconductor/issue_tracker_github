@@ -246,13 +246,17 @@ module Core
       CoreConfig.set_request_uri(request.base_url)
     end
     if Core.is_spoof? request
-      puts "IP is not from github"
-      return "sorry, working through some trust issues with unknown IP addresses."
+      puts "Unknown IP address"
+      return [400, "Unknown IP address"]
     end
-    json = request.body.read
-    obj = JSON.parse json
+    begin
+      json = request.body.read
+      obj = JSON.parse json
+    rescue JSON::ParserError
+      return [400, "Failed to parse JSON"]
+    end
     if (!obj.has_key? 'action') and (!obj.has_key? 'ref')
-      return 'I can only handle push and issue (and issue comment)event hooks'
+      return [400, "Only push, issue, and issue comment event hooks supported"]
     end
     if obj.has_key? 'ref'
       return Core.handle_push(obj)
@@ -264,13 +268,13 @@ module Core
       return Core.handle_issue_label_added(obj)
     end
     if obj['repository']['full_name'] != Core::NEW_ISSUE_REPO
-      puts "got a request from #{obj['repository']['full_name']}, not the one we like."
-      return "ignoring issue from other repo"
+      puts "Unknown repository #{obj['repository']['full_name']}"
+      return [400, "Unknown repository"]
     end
     if obj.has_key? 'action' and  obj['action'] == "opened"
       return Core.handle_new_issue(obj)
     end
-    'you posted something!'
+    [200, 'Post handled']
   end
 
   def Core.handle_issue_comment(obj)
@@ -441,7 +445,6 @@ module Core
 
 
   def Core.handle_push(obj)
-    puts "in handle_push"
     repos = obj['repository']['full_name']
     db_record = get_repo_by_repo_name(repos)
     if db_record.nil?
@@ -454,7 +457,7 @@ module Core
     default_branch = repos_obj['default_branch']
     push_branch = obj['ref'].sub("refs/heads/", "")
     unless push_branch == default_branch
-      return "ignoring push to #{push_branch} branch, only interested in the default branch (#{default_branch})"
+      return "#{push_branch} branch ignored, only handling #{default_branch}"
     end
 
     build_ok = false
