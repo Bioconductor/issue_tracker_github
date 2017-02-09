@@ -402,7 +402,7 @@ module Core
     issue_number = obj['issue']['number']
     if obj["label"]["name"] == CoreConfig.labels[:ACCEPTED_LABEL]
       package_repos =
-        obj['issue']['body'].split("\r\n").find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "")
+        obj['issue']['body'].split("\n").find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "").strip
       package = obj['issue']['title']
       recipient_email = CoreConfig.auth_config["email_recipient"]
       recipient_name = CoreConfig.auth_config["email_recipient_name"]
