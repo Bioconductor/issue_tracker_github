@@ -402,8 +402,11 @@ module Core
     issue_number = obj['issue']['number']
     if obj["label"]["name"] == CoreConfig.labels[:ACCEPTED_LABEL]
       package_repos =
-        obj['issue']['body'].split("\n").find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "").strip
+        obj['issue']['body'].split("\n").
+        find {|i| i.start_with? "- Repository: "}.sub("- Repository: ", "").
+        strip
       package = obj['issue']['title']
+
       recipient_email = CoreConfig.auth_config["email_recipient"]
       recipient_name = CoreConfig.auth_config["email_recipient_name"]
       from_email = "bioc-github-noreply@bioconductor.org"
@@ -412,33 +415,36 @@ module Core
       message= <<-END.unindent
         Dear Bioconductor package administrator,
 
-        The package reviewer #{login} has marked the package
-        '#{package}' as accepted.
+        Package '#{package}' accepted. Please add this package to
+        version control.
 
-        Please add this package to version control.
+        Issue: https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
 
-        The issue where the package was reviewed is here:
-
-        https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
-
-        The package source code is here:
-
-        #{package_repos}
+        Source: #{package_repos}
 
         Thanks,
 
         #{Octokit.user.login}
-
       END
-
       Core.send_email("#{from_name} <#{from_email}>",
         "#{recipient_name} <#{recipient_email}>",
         subject,
         message)
-      return "ok, emailed package administrator"
+
+      comment= <<-END.unindent
+        Your package has been accepted. It will be added to the
+        Bioconductor svn repository and nightly builds. Additional
+        information will be sent to the maintainer email address in
+        the next several days.
+
+        Thank you for contributing to Bioconductor!
+      END
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+
+      return "ok, package accepted"
     elsif obj['label']['name'] == CoreConfig.labels[:DECLINED_LABEL]
       Core.close_issue(issue_number)
-      return "package was declined, closing issue"
+      return "ok, package declined, issue closed"
     end
     return "handle_issue_label_added"
   end
@@ -688,7 +694,9 @@ module Core
       Hi devteam,
 
       Repository: https://github.com/#{repos}
+
       Issue:  https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+
       Approve: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/approve/#{password}
 
       Reject: #{CoreConfig.request_uri}/moderate_new_issue/#{issue_number}/reject/#{password}
