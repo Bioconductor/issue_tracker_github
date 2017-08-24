@@ -433,7 +433,7 @@ module Core
 
       comment= <<-END.unindent
         Your package has been accepted. It will be added to the
-        Bioconductor svn repository and nightly builds. Additional
+        Bioconductor Git repository and nightly builds. Additional
         information will be sent to the maintainer email address in
         the next several days.
 
