@@ -255,6 +255,9 @@ module Core
     rescue JSON::ParserError
       return [400, "Failed to parse JSON"]
     end
+    if (obj.has_key? 'zen')
+      return [200, "ping received, Bioconductor/Contributions webhook ok"]
+    end
     if (!obj.has_key? 'action') and (!obj.has_key? 'ref')
       return [400, "Only push, issue, and issue comment event hooks supported"]
     end
