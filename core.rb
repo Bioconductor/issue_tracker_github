@@ -367,6 +367,9 @@ module Core
       See https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
 
       You cannot post the same repository more than once.
+
+      If you would like this repository to be linked to #{issue_number},
+      Please contact a Bioconductor Core Member.
     END
     if close
       comment += "I am closing this issue."
