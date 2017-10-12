@@ -371,7 +371,7 @@ module Core
 
       You cannot post the same repository more than once.
 
-      If you would like this repository to be linked to #{issue_number},
+      If you would like this repository to be linked to issue number: #{issue_number},
       Please contact a Bioconductor Core Member.
     END
     if close
