@@ -288,7 +288,7 @@ module Core
     # Be sure and ignore all comments posted by this bot itself.
     login = obj['comment']['user']['login']
     if login == Octokit.user.login
-      return "ignoring a comment that i made myself."
+      return "ignoring a comment that I made myself."
     end
     if login != obj['issue']['user']['login']
       return "ignoring comment that's not from the creator of the issue."
@@ -773,9 +773,11 @@ module Core
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
       package_name = description.scan(/^Package: *(.+)/).first.first.strip
-      unless repos_url.split("/").last == package_name
-        return Core.handle_package_name_mismatch( repos_url,
-                 package_name, issue_number, login)
+      unless (repos_url.split("/").last == package_name) or
+            (package_name == "BioThingsClient") # special case!
+        return Core.handle_package_name_mismatch(
+                 repos_url, package_name, issue_number, login
+               )
       end
       # looking good so far....
       # FIXME - also make sure it's not a repos in Bioconductor-mirror
