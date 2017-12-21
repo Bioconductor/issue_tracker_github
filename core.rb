@@ -216,6 +216,11 @@ module Core
     end
   end
 
+  def Core.count_ssh_keys(repos)
+    user_keys_url = repos.split('/')[0..3].join("/") + ".keys"
+    return HTTParty.get(user_keys_url).response.body.lines.count
+  end
+
   def Core.add_repos_to_db(repos, hash, issue_number, login)
     CoreConfig.db.execute "insert into repos (name, pw_hash, issue_number, login) values (?,?,?,?)",
       repos.sub(/https:\/\/github.com\//i, ""), hash, issue_number, login
@@ -791,6 +796,7 @@ module Core
 
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
+      n_ssh_keys = Core.count_ssh_keys(repos_url)
       Core.add_repos_to_db(repos_url, hash, issue_number, login)
       if REQUIRE_PREAPPROVAL
         comment= <<-END.unindent
@@ -806,6 +812,20 @@ module Core
           ```
 
         END
+        if (n_ssh_keys == 0)
+          add_keys_comment= <<-END.unindent
+            Consider adding SSH keys to your GitHub account. SSH keys will
+            are used to control access to accepted _Bioconductor_ packages.
+
+            See [these instructions][1] on adding ssh keys to your
+            GitHub account.
+
+            [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
+
+          END
+          comment = comment + add_keys_comment
+        end
+
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
