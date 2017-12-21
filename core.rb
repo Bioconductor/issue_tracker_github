@@ -217,7 +217,7 @@ module Core
   end
 
   def Core.count_ssh_keys(repos)
-    user_keys_url = repos.split('/')[0..3].join("/") + ".keys"
+    user_keys_url = repos.split("/")[0..3].join("/") + ".keys"
     return HTTParty.get(user_keys_url).response.body.lines.count
   end
 
@@ -796,7 +796,7 @@ module Core
 
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
-      n_ssh_keys = Core.count_ssh_keys(repos_url)
+      n_ssh_keys = Core.count_ssh_keys(full_repos_url)
       Core.add_repos_to_db(repos_url, hash, issue_number, login)
       if REQUIRE_PREAPPROVAL
         comment= <<-END.unindent
