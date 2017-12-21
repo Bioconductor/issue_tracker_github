@@ -814,16 +814,16 @@ module Core
         END
         if (n_ssh_keys == 0)
           add_keys_comment= <<-END.unindent
-            Consider adding SSH keys to your GitHub account. SSH keys will
-            are used to control access to accepted _Bioconductor_ packages.
 
-            See [these instructions][1] on adding ssh keys to your
-            GitHub account.
+            Consider adding SSH keys to your GitHub account. SSH keys
+            will are used to control access to accepted _Bioconductor_
+            packages. See [these instructions][1] to add SSH keys to
+            your GitHub account.
 
             [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
 
           END
-          comment = comment + add_keys_comment
+          comment += add_keys_comment
         end
 
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
