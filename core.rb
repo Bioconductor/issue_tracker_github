@@ -799,7 +799,7 @@ module Core
       n_ssh_keys = Core.count_ssh_keys(full_repos_url)
       Core.add_repos_to_db(repos_url, hash, issue_number, login)
       if REQUIRE_PREAPPROVAL
-        comment= <<-END.unindent
+        comment= <<-END
           Hi @#{login}
 
           Thanks for submitting your package. We are taking a quick
@@ -813,7 +813,7 @@ module Core
 
         END
         if (n_ssh_keys == 0)
-          add_keys_comment= <<-END.unindent
+          add_keys_comment= <<-END
 
             Consider adding SSH keys to your GitHub account. SSH keys
             will are used to control access to accepted _Bioconductor_
@@ -825,6 +825,7 @@ module Core
           END
           comment += add_keys_comment
         end
+        comment = comment.unindent
 
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         return Core.handle_preapproval(repos_url, issue_number, password)
