@@ -991,14 +991,15 @@ module Core
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
-        Your package has been approved for building.  Your package is
-        now submitted to our queue.
+        A reviewer has been assigned to your package Learn [What to Expect][2]
+        during the review process.
 
         **IMPORTANT**: Please read [the instructions][1] for setting
         up a push hook on your repository, or further changes to your
         repository will NOT trigger a new build.
 
         [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md#adding-a-web-hook
+        [2]: https://github.com/Bioconductor/Contributions#what-to-expect
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
