@@ -445,8 +445,8 @@ module Core
       comment= <<-END.unindent
         Your package has been accepted. It will be added to the
         Bioconductor Git repository and nightly builds. Additional
-        information will be sent to the maintainer email address in
-        the next several days.
+        information will be posed to this issue in the next several
+        days.
 
         Thank you for contributing to Bioconductor!
       END
