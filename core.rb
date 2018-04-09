@@ -96,6 +96,7 @@ class CoreConfig
     REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
+    INACTIVE_LABEL: "3c. inactive",
 
     VERSION_BUMP_LABEL: "VERSION BUMP REQUIRED",
 
@@ -456,6 +457,20 @@ module Core
     elsif obj['label']['name'] == CoreConfig.labels[:DECLINED_LABEL]
       Core.close_issue(issue_number)
       return "ok, package declined, issue closed"
+    elsif obj['label']['name'] == CoreConfig.labels[:INACTIVE_LABEL]
+      comment= <<-END.unindent
+        There has been no progress on this issue for an extended period
+        of time and therefore will be closed due to inactivity.
+        You may reopen the issue when you feel you have the time to
+        actively participate in the review/submission process. Please
+        also keep in mind when a package is accepted to Bioconductor
+        a level of active maintenance is expected.
+
+        Thank you for interest in Bioconductor.
+      END
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+      Core.close_issue(issue_number)
+      return "ok, package inactive, issue closed"
     end
     return "handle_issue_label_added"
   end
@@ -815,7 +830,7 @@ module Core
         if (n_ssh_keys == 0)
           add_keys_comment= <<-END
 
-            Consider adding SSH keys to your GitHub account. SSH keys
+            **Add SSH keys** to your GitHub account. SSH keys
             will are used to control access to accepted _Bioconductor_
             packages. See [these instructions][1] to add SSH keys to
             your GitHub account.
@@ -991,7 +1006,7 @@ module Core
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
-        A reviewer has been assigned to your package Learn [What to Expect][2]
+        A reviewer has been assigned to your package Learn [what to expect][2]
         during the review process.
 
         **IMPORTANT**: Please read [the instructions][1] for setting
