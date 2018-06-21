@@ -459,12 +459,12 @@ module Core
       return "ok, package declined, issue closed"
     elsif obj['label']['name'] == CoreConfig.labels[:INACTIVE_LABEL]
       comment= <<-END.unindent
-        There has been no progress on this issue for an extended period
-        of time and therefore will be closed due to inactivity.
-        You may reopen the issue when you feel you have the time to
-        actively participate in the review/submission process. Please
-        also keep in mind when a package is accepted to Bioconductor
-        a level of active maintenance is expected.
+        This issue is being closed because there has been no progress
+        for an extended period of time. You may reopen the issue when
+        you have the time to actively participate in the review /
+        submission process. Please also keep in mind that a package
+        accepted to Bioconductor requires a commitment on your part to
+        ongoing maintenance.
 
         Thank you for interest in Bioconductor.
       END
@@ -1006,7 +1006,7 @@ module Core
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
-        A reviewer has been assigned to your package Learn [what to expect][2]
+        A reviewer has been assigned to your package. Learn [what to expect][2]
         during the review process.
 
         **IMPORTANT**: Please read [the instructions][1] for setting
