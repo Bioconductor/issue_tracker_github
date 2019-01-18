@@ -149,6 +149,7 @@ module Core
 
   CoreConfig.set_auth_config(YAML::load_file(File.join(File.dirname(__FILE__), "auth.yml" )))
 
+  $LastCommitId = "initialize"
 
   GITHUB_URL_REGEX = %r{https://github.com/[^/]+/[^ /\s]+}
   NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
@@ -267,7 +268,8 @@ module Core
     if (!obj.has_key? 'action') and (!obj.has_key? 'ref')
       return [400, "Only push, issue, and issue comment event hooks supported"]
     end
-    if obj.has_key? 'ref'
+    if (obj.has_key? 'ref') and (obj.has.key? 'after') and (obj['after'] != $LastCommitId)
+      $LastCommitId = obj['after']
       return Core.handle_push(obj)
     end
     if obj.has_key? 'action' and obj['action'] == "created"
