@@ -272,6 +272,9 @@ module Core
       $LastCommitId = obj['after']
       return Core.handle_push(obj)
     end
+    if (obj.has_key? 'ref') and (obj.has_key? 'after') and (obj['after'] == $LastCommitId)
+        return [200, "repeated action"]
+    end 
     if obj.has_key? 'action' and obj['action'] == "created"
       return Core.handle_issue_comment(obj)
     end
