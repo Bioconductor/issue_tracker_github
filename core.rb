@@ -268,7 +268,7 @@ module Core
     if (!obj.has_key? 'action') and (!obj.has_key? 'ref')
       return [400, "Only push, issue, and issue comment event hooks supported"]
     end
-    if (obj.has_key? 'ref') and (obj.has.key? 'after') and (obj['after'] != $LastCommitId)
+    if (obj.has_key? 'ref') and (obj.has_key? 'after') and (obj['after'] != $LastCommitId)
       $LastCommitId = obj['after']
       return Core.handle_push(obj)
     end
