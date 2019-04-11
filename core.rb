@@ -245,7 +245,16 @@ module Core
       ["127.0.0.1", "localhost"].include? request.env['HTTP_HOST']
     return false if ip == "127.0.0.1" # allow local testing
     regex = %r{^192\.30\.25[2345]\.}
-    ip !~ regex
+    test = ip !~ regex
+    if (test)
+      regex = %r{^185\.199\.1(0[89]|1[01])\.}
+      test = ip !~ regex
+    end
+    if (test)
+      regex = %r{^140.82.1(1[23456789]|2[01234567])\.}
+      test = ip !~ regex
+    end
+    test
   end
 
   def Core.handle_post(request)
