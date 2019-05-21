@@ -9,6 +9,7 @@ require 'securerandom'
 require 'aws-sdk'
 require 'stomp'
 require 'open-uri'
+require 'nokogiri'
 require 'pry' # remove this when not needed
 
 # When testing, there should be a stomp (rabbitmq) broker running, like so:
@@ -344,6 +345,10 @@ module Core
       return Core.handle_repo_does_not_exist(repos_url, issue_number, login,
       close=false)
     end
+    unless Core.repo_caps_check? (repos_url, full_repos_url) # github url in issue does not match actual repo caps
+      return Core.handle_caps_check_failed(repos_url, issue_number, login,
+      close=false)
+    end
     description = Core.get_description_file(repos_url)
     if description.nil?
       return Core.handle_no_description_file(full_repos_url, issue_number, login,
@@ -632,6 +637,12 @@ module Core
     end
   end
 
+  def Core.repo_caps_check? (repos_url, full_repos_url)
+    doc = Nokogiri::HTML(open(full_repos_url))
+    vl = doc.css('h1')[0].text.gsub!(/\s+/, '')
+    return repos_url == vl
+  end
+
   def Core.handle_bioconductor_mirror_repo(issue_number, login)
     comment = <<-END.unindent
       Dear @#{login} ,
@@ -661,6 +672,23 @@ module Core
     end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
     return "repos does not exist"
+  end
+
+  def Core.handle_caps_check_failed(repos_url, issue_number, login, close=true)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+
+      The github link provided above https://github.com/#{repos_url} ,
+      does not match the capitalization of the github repository.
+      Please update.
+    END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "repo capitalization does not match"
+
   end
 
   def Core.get_description_response(repos_url)
