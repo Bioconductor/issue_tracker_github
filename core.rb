@@ -344,6 +344,11 @@ module Core
       return Core.handle_repo_does_not_exist(repos_url, issue_number, login,
       close=false)
     end
+    github_repo_name = Core.get_repo_name(repos_url)
+    unless repos_url == github_repo_name
+      return Core.handle_caps_check_failed(repos_url, github_repo_name,
+      issue_number, login, close=false)
+    end
     description = Core.get_description_file(repos_url)
     if description.nil?
       return Core.handle_no_description_file(full_repos_url, issue_number, login,
@@ -632,6 +637,12 @@ module Core
     end
   end
 
+  def Core.get_repo_name(repos_url)
+    url = "https://api.github.com/repos/"+repos_url
+    response = HTTParty.get(url)
+    return response.parsed_response["full_name"]
+  end
+
   def Core.handle_bioconductor_mirror_repo(issue_number, login)
     comment = <<-END.unindent
       Dear @#{login} ,
@@ -661,6 +672,23 @@ module Core
     end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
     return "repos does not exist"
+  end
+
+  def Core.handle_caps_check_failed(repos_url, github_repo_name, issue_number, login, close=true)
+    comment = <<-END.unindent
+      Dear @#{login} ,
+
+      The github link provided https://github.com/#{repos_url} ,
+      does not match the capitalization of the github repository:
+      #{github_repo_name}.
+      Please update the link for the repository on this issue page.
+    END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "repo capitalization does not match"
   end
 
   def Core.get_description_response(repos_url)
