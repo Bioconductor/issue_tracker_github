@@ -57,5 +57,27 @@ On ubuntu@issues.bioconductor.org
 
     sudo chef-client
 
+
+### Updating data bags
+
+There are authentication credentials encoded by [chef data bags][]. 
+See git credentials for keys to authorize changes. 
+To show contains of a data bag:
+
+     knife data bag show IssueTrackerConfig IssueTrackerConfig --secret-file /home/lori/Documents/databag.key
+
+To edit the contents of the data bag: 
+
+    knife data bag edit IssueTrackerConfig IssueTrackerConfig --secret-file /home/lori/Documents/databag.key 
+    
+The data bag should remain encrypted but to test run the show command without including --secret-file 
+and it should show encrypted contents. 
+
+You can list all managed data bags by doing 
+
+    knife data bag list
+    
+
 [chef]: https://github.com/Bioconductor/issue_tracker_github_cookbook
 [single package builder]: https://staging.bioconductor.org:8000.
+[chef data bags]: https://docs.chef.io/knife_data_bag.html
