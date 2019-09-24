@@ -77,7 +77,7 @@ You can list all managed data bags by doing
 
     knife data bag list
     
-The aws keys correspond to the sdk-mail user security credentials.
+The aws keys correspond to the sdk-email user security credentials.
 
 
 [chef]: https://github.com/Bioconductor/issue_tracker_github_cookbook
