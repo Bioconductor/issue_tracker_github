@@ -77,6 +77,8 @@ You can list all managed data bags by doing
 
     knife data bag list
     
+The aws keys correspond to the sdk-mail user security credentials.
+
 
 [chef]: https://github.com/Bioconductor/issue_tracker_github_cookbook
 [single package builder]: https://staging.bioconductor.org:8000.
