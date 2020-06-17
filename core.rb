@@ -283,7 +283,7 @@ module Core
     end
     if (obj.has_key? 'ref') and (obj.has_key? 'after') and (obj['after'] == $LastCommitId)
         return [200, "repeated action"]
-    end 
+    end
     if obj.has_key? 'action' and obj['action'] == "created"
       return Core.handle_issue_comment(obj)
     end
@@ -750,6 +750,31 @@ module Core
     return "DESCRIPTION and issue package name differ!"
   end
 
+
+  def Core.handle_no_ssh_keys(repos_url, package_name, issue_number,
+        login, close=true)
+    repos_package_name = repos_url.split('/').last
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      **Add SSH keys** to your GitHub account. SSH keys will are used
+      to control access to accepted _Bioconductor_ packages. See
+      [these instructions][1] to add SSH keys to your GitHub
+      account. Once you add your SSH keys to your github account,
+      please resubmit your issue. We **require** SSH keys to be
+      associated with a github username.
+
+      [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
+    END
+    if close
+      comment += "I am closing this issue. Please try again with a new issue."
+      Core.close_issue(issue_number)
+    end
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "No SSH keys for username!"
+  end
+
+
   def Core.handle_preapproval(repos, issue_number, password)
     recipient_email = CoreConfig.auth_config["email_recipient"]
     recipient_name = CoreConfig.auth_config["email_recipient_name"]
@@ -841,6 +866,13 @@ module Core
                  repos_url, package_name, issue_number, login
                )
       end
+      n_ssh_keys = Core.count_ssh_keys(full_repos_url)
+
+      if (n_ssh_keys == 0)
+        return Core.handle_no_ssh_keys(repos_url, package_name,
+                                       issue_number, login, close=true)
+      end
+
       # looking good so far....
       # FIXME - also make sure it's not a repos in Bioconductor-mirror
       # or another one that we definitely know about referring
@@ -869,26 +901,22 @@ module Core
           ```
 
         END
-        if (n_ssh_keys == 0)
-          add_keys_comment= <<-END
+        # if (n_ssh_keys == 0)
+        #   add_keys_comment= <<-END
 
-            **Add SSH keys** to your GitHub account. SSH keys
-            will are used to control access to accepted _Bioconductor_
-            packages. See [these instructions][1] to add SSH keys to
-            your GitHub account.
+        #     **Add SSH keys** to your GitHub account. SSH keys
+        #     will are used to control access to accepted _Bioconductor_
+        #     packages. See [these instructions][1] to add SSH keys to
+        #     your GitHub account.
 
-            [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
+        #     [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
 
-          END
-          comment += add_keys_comment
-        end
+        #   END
+        #   comment += add_keys_comment
+        # end
         comment = comment.unindent
 
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-
-        if (n_ssh_keys == 0)
-          return Core.close_issue(issue_number)
-        end
 
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
