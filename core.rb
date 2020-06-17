@@ -885,6 +885,11 @@ module Core
         comment = comment.unindent
 
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+
+        if (n_ssh_keys == 0)
+          return Core.close_issue(issue_number)
+        end
+
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
         comment = <<-END.unindent
