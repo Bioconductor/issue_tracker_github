@@ -518,7 +518,7 @@ module Core
     if build_ok
       comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-      Core.start_build(giturl, issue_number)
+      Core.start_build(giturl, issue_number, commit_id)
       return "OK starting build"
     else
       return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
@@ -1158,7 +1158,7 @@ module Core
   end
 
 
-  def Core.start_build(repos_url, issue_number)
+  def Core.start_build(repos_url, issue_number, commit_id=nil)
     segs = repos_url.sub(/\/$|\.git$/, '').split('/')
     format_ok = repos_url.downcase.start_with?("https://github.com") | repos_url.downcase.start_with?("https://git.bioconductor.org")
     repos_url = "https://github.com/" + repos_url unless format_ok
@@ -1188,6 +1188,9 @@ module Core
     obj['r_version'] = config_yaml['single_package_builder']['r_version']
     obj['svn_url'] = repos_url
     obj['repository'] = 'scratch'
+    if !commit_id.nil?
+      obj['commit_id'] = commit_id
+    end
     json = obj.to_json
 
     stomp = CoreConfig.auth_config['stomp']
