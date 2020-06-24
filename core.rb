@@ -226,7 +226,7 @@ module Core
   # Count keys on login
   def Core.count_login_keys(login)
     login_keys_url = "https://github.com/" + login + ".keys"
-    return HTTParty.get(user_keys_url).response.body.lines.count
+    return HTTParty.get(login_keys_url).response.body.lines.count
   end
 
   def Core.add_repos_to_db(repos, hash, issue_number, login)
