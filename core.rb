@@ -185,9 +185,16 @@ module Core
     SQL
   end
 
-  def Core.get_repo_issue_number (repo)
+  def Core.get_repo_issue_number(repo)
     rows = CoreConfig.db.execute("select issue_number from repos where name = ?",
       repo.sub(/https:\/\/github.com\//i, ""))
+    return nil if rows.empty?
+    rows.first.first
+  end
+
+  def Core.get_repo_issue_number_git(pkgname)
+    call = "select issue_number from repos where name LIKE '%/" +  pkgname + "'"
+    rows = CoreConfig.db.execute(call)
     return nil if rows.empty?
     rows.first.first
   end
@@ -494,6 +501,30 @@ module Core
     return "handle_issue_label_added"
   end
 
+  def Core.handle_git_push_newpackage(pkgname, commit_id)
+    giturl = "https://git.bioconductor.org/packages/" + pkgname
+    issue_number = get_repo_issue_number_git(pkgname)
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+
+    build_ok = false
+    labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+      map{|i| i.name}
+    if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+      build_ok = true
+    elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
+      build_ok = true
+    end
+
+    if build_ok
+      comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+      Core.start_build(giturl, issue_number)
+      return "OK starting build"
+    else
+      return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
+      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
+    end
+  end
 
   def Core.handle_push(obj)
     repos = obj['repository']['full_name']
@@ -1129,8 +1160,8 @@ module Core
 
   def Core.start_build(repos_url, issue_number)
     segs = repos_url.sub(/\/$|\.git$/, '').split('/')
-    repos_url = "https://github.com/" +
-      repos_url unless repos_url.downcase.start_with?("https://github.com")
+    format_ok = repos_url.downcase.start_with?("https://github.com") | repos_url.downcase.start_with?("https://git.bioconductor.org")
+    repos_url = "https://github.com/" + repos_url unless format_ok
     pkgname = segs.last
     now = Time.now
     # FIXME this is NOT pacific time unless we explicitly
