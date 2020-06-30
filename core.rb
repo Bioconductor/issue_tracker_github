@@ -500,6 +500,22 @@ module Core
     return "handle_issue_label_added"
   end
 
+  def Core.handle_git_push(request)
+    begin
+      json = request.body.read
+      obj = JSON.parse json
+    rescue JSON::ParserError
+      return [400, "Failed to parse JSON"]
+    end
+    if (!obj.has_key? 'pkgname')
+      return [400, "Request must include pkgname"]
+    end
+    if (!obj.has_key? 'commit_id')
+      return [400, "Request must include commit_id"]
+    end
+
+    return [200, "Ok starting build testing only"]
+  end
 
   def Core.handle_push(obj)
     repos = obj['repository']['full_name']
