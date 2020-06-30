@@ -521,37 +521,42 @@ module Core
     giturl = "https://git.bioconductor.org/packages/" + pkgname 
     issue_number = get_repo_issue_number_git(pkgname)
 
+    # figure out what to do...
+    build_ok = false
+    newpackage = false
     if !issue_number.nil?
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
-
-      build_ok = false
-      newpackage = true
       labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
-        map{|i| i.name}
+                 map{|i| i.name}
       if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
         build_ok = true
+        newpackage = true
       elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
         build_ok = true
+        newpackage = true
       elsif labels.include? CoreConfig.labels[:ACCEPTED_LABEL]
         build_ok = true
-        newpackage = false
       end
-
-      if build_ok
-        comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
-        if newpackage
-          Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-        end
-        Core.start_build(giturl, issue_number, commit_id, newpackage)
-        return [200, "OK starting build"]
-      else
-        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
-        label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
-      end
-    else
-      Core.start_build(giturl, issue_number, commit_id, newpackage=false)
-      return [200, "OK starting build"]
+    # else
+    #   # when building ALL packages on commit
+    #   build_ok = true
     end
+
+    # ...now do it
+    if build_ok
+      if newpackage
+        comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
+        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+      end
+      Core.start_build(giturl, issue_number, commit_id, newpackage=newpackage)
+      return [200, "OK starting build"]
+    else
+      if newpackage
+        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
+                      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
+      end
+      return [200, "OK not building existing package"]
+    end      
   end
 
   def Core.handle_push(obj)
