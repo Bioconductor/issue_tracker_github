@@ -10,8 +10,8 @@ post '/' do
   return Core.handle_post(request)
 end
 
-get '/start_build/:pkgname/:commitid' do
-  return Core.handle_git_push_newpackage(params[:pkgname], params[:commitid])
+post '/start_build' do
+  return Core.handle_git_push(request)
 end
 
 get '/moderate_new_issue/:issue/:action/:password' do

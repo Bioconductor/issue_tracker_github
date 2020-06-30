@@ -501,28 +501,56 @@ module Core
     return "handle_issue_label_added"
   end
 
-  def Core.handle_git_push_newpackage(pkgname, commit_id)
-    giturl = "https://git.bioconductor.org/packages/" + pkgname
-    issue_number = get_repo_issue_number_git(pkgname)
-    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
-
-    build_ok = false
-    labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
-      map{|i| i.name}
-    if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
-      build_ok = true
-    elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
-      build_ok = true
+  def Core.handle_git_push(request)
+    begin
+      json = request.body.read
+      obj = JSON.parse json
+    rescue JSON::ParserError
+      return [400, "Failed to parse JSON"]
+    end
+    if (!obj.has_key? 'pkgname')
+      return [400, "Request must include pkgname"]
+    end
+    if (!obj.has_key? 'commit_id')
+      return [400, "Request must include commit_id"]
     end
 
-    if build_ok
-      comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
-      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-      Core.start_build(giturl, issue_number, commit_id)
-      return "OK starting build"
+    pkgname = obj['pkgname'].to_s
+    commit_id = obj['commit_id'].to_s
+
+    giturl = "https://git.bioconductor.org/packages/" + pkgname 
+    issue_number = get_repo_issue_number_git(pkgname)
+
+    if !issue_number.nil?
+      issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+
+      build_ok = false
+      newpackage = true
+      labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+        map{|i| i.name}
+      if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+        build_ok = true
+      elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
+        build_ok = true
+      elsif labels.include? CoreConfig.labels[:ACCEPTED_LABEL]
+        build_ok = true
+        newpackage = false
+      end
+
+      if build_ok
+        comment = "Received a valid push on git.bioconductor.org; starting a build for commit id: " + commit_id
+        if newpackage
+          Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+        end
+        Core.start_build(giturl, issue_number, commit_id, newpackage)
+        return [200, "OK starting build"]
+      else
+        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
+        label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
+      end
     else
-      return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
-      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
+      Core.start_build(giturl, issue_number, commit_id, newpackage=false)
+      return [200, "OK starting build"]
     end
   end
 
@@ -1158,10 +1186,16 @@ module Core
   end
 
 
-  def Core.start_build(repos_url, issue_number, commit_id=nil)
+  def Core.start_build(repos_url, issue_number=nil, commit_id=nil, newpackage=true)
     segs = repos_url.sub(/\/$|\.git$/, '').split('/')
     format_ok = repos_url.downcase.start_with?("https://github.com") | repos_url.downcase.start_with?("https://git.bioconductor.org")
     repos_url = "https://github.com/" + repos_url unless format_ok
+
+    pkgsrc = "bioconductor"
+    if repos_url.downcase.start_with?("https://github.com") or newpackage
+      pkgsrc = "github"
+    end
+
     pkgname = segs.last
     now = Time.now
     # FIXME this is NOT pacific time unless we explicitly
@@ -1180,7 +1214,10 @@ module Core
     obj = {}
     obj['job_id'] = "#{pkgname}_#{timestamp1}"
     obj['time'] = timestamp2
-    obj['client_id'] = "single_package_builder_github:#{issue_number}:#{pkgname}"
+    if issue_number.nil?
+      issue_number = "#{pkgname}"
+    end
+    obj['client_id'] = "single_package_builder_#{pkgsrc}:#{issue_number}:#{pkgname}"
     obj['force'] = true
     config_yaml = Core.get_bioc_config_yaml()
     devel_version = config_yaml['single_package_builder']['bioc_version']
@@ -1191,6 +1228,7 @@ module Core
     if !commit_id.nil?
       obj['commit_id'] = commit_id
     end
+    obj['newpackage'] = newpackage
     json = obj.to_json
 
     stomp = CoreConfig.auth_config['stomp']
