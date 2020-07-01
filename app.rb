@@ -18,3 +18,8 @@ get '/moderate_new_issue/:issue/:action/:password' do
   return Core.moderate_new_issue(params[:issue], params[:action],
     params[:password])
 end
+
+get '/moderate_additional_package/:issue/:action/:password' do
+  return Core.moderate_additional_package(params[:repos], params[:issue],
+  params[:action], params[:password])
+end

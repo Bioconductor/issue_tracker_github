@@ -373,27 +373,21 @@ module Core
         close=false)
     end
 
-    Core.add_repos_to_db(repos_url, "no_hash_needed", issue_number, login)
-    Core.start_build(repos_url, issue_number)
-    msg = "Starting build on additional package #{full_repos_url}."
-    msg_full= <<-END.unindent
-    Hi @#{login},
+    password = SecureRandom.hex(20)
+    hash = BCrypt::Password.create(password)
 
-    #{msg}
+    Core.add_repos_to_db(repos_url, hash, issue_number, login)
 
-    **IMPORTANT**: Please read [the instructions][1] for setting up a
-    push hook on your repository, or further changes to your
-    additional package repository will NOT trigger a new build.
-
-    The DESCRIPTION file of this additional package is:
-
-    ```
-    #{description}
-    ```
-    [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md
+    comment= <<-END
+      Hi @#{login},
+      Thanks for submitting your additional package: #{full_repos_url}.
+      We are taking a quick look at it and you will hear back from us soon.
     END
-    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg_full)
-    return msg
+    comment = comment.unindent
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+
+    return Core.handle_preapproval_additional_package(repos_url, issue_number, password)
+
   end
 
   # FIXME This checks if our DB already has a row with the same repos name.
@@ -524,7 +518,7 @@ module Core
     pkgname = obj['pkgname'].to_s
     commit_id = obj['commit_id'].to_s
 
-    giturl = "https://git.bioconductor.org/packages/" + pkgname 
+    giturl = "https://git.bioconductor.org/packages/" + pkgname
     issue_number = get_repo_issue_number_git(pkgname)
 
     # figure out what to do...
@@ -565,7 +559,7 @@ module Core
                       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
       end
       return [200, "OK not building existing package"]
-    end      
+    end
   end
 
   def Core.handle_push(obj)
@@ -909,6 +903,56 @@ module Core
       msg)
   end
 
+  def Core.handle_preapproval_additional_package(repos, issue_number, password)
+    recipient_email = CoreConfig.auth_config["email_recipient"]
+    recipient_name = CoreConfig.auth_config["email_recipient_name"]
+    from_email = "bioc-github-noreply@bioconductor.org"
+    from_name = "Bioconductor Issue Tracker"
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
+      [CoreConfig.labels[:AWAITING_MODERATION_LABEL]])
+    msg = <<-END.unindent
+      Hi devteam,
+
+      Repository: https://github.com/#{repos}
+
+      Issue:  https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
+
+      Approve: #{CoreConfig.request_uri}/moderate_additional_package/#{repos}/#{issue_number}/approve/#{password}
+
+      Reject: #{CoreConfig.request_uri}/moderate_additional_package/#{repos}/#{issue_number}/reject/#{password}
+
+      A github repository has been submitted as an additional package to the
+      tracker.  I'd like you to take a quick look at it.
+
+      Make sure that
+
+      1. It looks like a package that is intended for _Bioconductor_,
+         and not one that is trying to use the single package builder
+         for free; and
+
+      2. It does not seem like a malicious package that will try to
+         cause damage to our build system. Don't check exhaustively
+         for this because there are many ways to hide badness.
+
+      Please approve or reject the package.
+
+      Only one person needs to do this. The web page will tell you if
+      it has been done already.
+
+      Please don't reply to this email.
+
+      Thanks,
+
+      The Bioconductor/GitHub issue tracker.
+    END
+    Core.send_email("#{from_name} <#{from_email}>",
+      "#{recipient_name} <#{recipient_email}>",
+      "Action required: Please allow/reject additional package submitted to tracker (issue ##{issue_number}: #{issue[:title]})",
+      msg)
+  end
+
+
   def Core.handle_new_issue(obj)
     puts "got a new issue!"
     login = obj['issue']['user']['login']
@@ -1159,11 +1203,11 @@ module Core
         A reviewer has been assigned to your package. Learn [what to expect][2]
         during the review process.
 
-        **IMPORTANT**: Please read [the instructions][1] for setting
-        up a push hook on your repository, or further changes to your
-        repository will NOT trigger a new build.
+        **IMPORTANT**: Please read [this documentation][1] for setting
+        up remotes to push to git.bioconductor.org. It is required to push a
+        version bump to git.bioconductor.org to trigger a new build.
 
-        [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md#adding-a-web-hook
+        [1]: https://bioconductor.org/developers/how-to/git/sync-existing-repositories
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
@@ -1172,14 +1216,79 @@ module Core
         issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
-      # FIXME  start a build!
-      repos_url = "https://github.com/#{repos['name']}"
+
+      segs = repos['name'].split("/")
+      pkgname = segs.last
+      giturl = "https://git.bioconductor.org/packages/" + pkgname
       assignee = Core.get_issue_assignee(issue_number)
       unless assignee.nil?
         Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
       end
-      Core.start_build(repos_url, issue_number)
-      # FIXME return to github issue, rather than text string
+      Core.start_build(giturl, issue_number, commit_id=nil, newpackage=true)
+
+      return "ok, marked issue as 'ok_to_build', starting a build..."
+    end
+    return "ok so far"
+
+  end
+
+  def Core.moderate_additional_package(repos_name, issue_number, action, password)
+    unless Core.is_authenticated?
+      return "oops, there's a problem with GitHub authentication!"
+    end
+    repos = Core.get_repo_by_repo_name(repos_name)
+    if repos.nil?
+      return "oops, i am not familiar with that issue/repository."
+    end
+
+    correct_password = BCrypt::Password.new(repos['pw_hash'])
+    unless correct_password == password
+      return "wrong password, you are not authorized"
+    end
+    unless ['approve', 'reject'].include? action
+      return "all i know how to do is approve and reject."
+    end
+    issue = Octokit.issue(CoreConfig.auth_config['issue_repo'], issue_number)
+    if issue['state'] == "closed"
+      return("this issue has already been rejected (and closed).")
+    end
+
+    if action == "reject"
+      comment= <<-END.unindent
+        This issue was deemed inappropriate for our issue tracker by a
+        member of the Bioconductor team.
+
+        This issue tracker is intended only for packages which are
+        being submitted for consideration by Bioconductor.
+
+        Any other use of the tracker is not approved.  If you feel
+        this designation is in error, please [send us email][1] and
+        include the URL of this issue.
+
+        [1]: maintainer@bioconductor.org
+      END
+      Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
+        comment)
+      return "ok, additional package rejected."
+    else
+      comment= <<-END.unindent
+
+        **IMPORTANT**: Please read [this documentation][1] for setting
+        up remotes to push to git.bioconductor.org. It is required to push a
+        version bump to git.bioconductor.org to trigger a new build.
+
+        [1]: https://bioconductor.org/developers/how-to/git/sync-existing-repositories
+        [2]: https://github.com/Bioconductor/Contributions#what-to-expect
+      END
+      Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
+        comment)
+      Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+        issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+
+      segs = repos_name.split("/")
+      pkgname = segs.last
+      giturl = "https://git.bioconductor.org/packages/" + pkgname
+      Core.start_build(giturl, issue_number, commit_id=nil, newpackage=true)
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
     return "ok so far"
