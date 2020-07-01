@@ -230,6 +230,12 @@ module Core
     return HTTParty.get(user_keys_url).response.body.lines.count
   end
 
+  # Count keys on login
+  def Core.count_login_keys(login)
+    login_keys_url = "https://github.com/" + login + ".keys"
+    return HTTParty.get(login_keys_url).response.body.lines.count
+  end
+
   def Core.add_repos_to_db(repos, hash, issue_number, login)
     CoreConfig.db.execute "insert into repos (name, pw_hash, issue_number, login) values (?,?,?,?)",
       repos.sub(/https:\/\/github.com\//i, ""), hash, issue_number, login
@@ -829,7 +835,7 @@ module Core
       [these instructions][1] to add SSH keys to your GitHub
       account. Once you add your SSH keys to your github account,
       please resubmit your issue. We **require** SSH keys to be
-      associated with a github username.
+      associated with the github username @#{login}.
 
       [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
     END
@@ -933,7 +939,9 @@ module Core
                  repos_url, package_name, issue_number, login
                )
       end
-      n_ssh_keys = Core.count_ssh_keys(full_repos_url)
+      # Don't count repos keys, instead count login.keys
+      # n_ssh_keys = Core.count_ssh_keys(full_repos_url)
+      n_ssh_keys = Core.count_login_keys(login)
 
       if (n_ssh_keys == 0)
         return Core.handle_no_ssh_keys(repos_url, package_name,
