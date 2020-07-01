@@ -535,10 +535,13 @@ module Core
         build_ok = true
         newpackage = true
       elsif labels.include? CoreConfig.labels[:ACCEPTED_LABEL]
-        build_ok = true
+        # when building ALL packges on commit
+        # package issue number exists and already accepted into bioc
+        #build_ok = true
       end
     # else
     #   # when building ALL packages on commit
+    #   # older packages without issue_number
     #   build_ok = true
     end
 
@@ -1219,6 +1222,8 @@ module Core
     obj = {}
     obj['job_id'] = "#{pkgname}_#{timestamp1}"
     obj['time'] = timestamp2
+    # NOTE: when we open to ALL packages also if !newpackage use packagename for
+    # accepted packages
     if issue_number.nil?
       issue_number = "#{pkgname}"
     end
