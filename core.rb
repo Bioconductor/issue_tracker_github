@@ -1009,12 +1009,18 @@ module Core
           up remotes to push to git.bioconductor.org. It is required to push a
           version bump to git.bioconductor.org to trigger a new build.
 
+          Bioconductor utilized your github ssh-keys for git.bioconductor.org
+          access. To manage keys and future access you may want to active your
+          [Bioconductor Git Credentials Account][2]
+
+
           The DESCRIPTION file of your package is:
 
           ```
           #{description}
           ```
           [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
+          [2]: https://git.bioconductor.org/BiocCredentials
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
@@ -1164,8 +1170,13 @@ module Core
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 
+        Bioconductor utilized your github ssh-keys for git.bioconductor.org
+        access. To manage keys and future access you may want to active your
+        [Bioconductor Git Credentials Account][3]
+
         [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
+        [3]: https://git.bioconductor.org/BiocCredentials
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
