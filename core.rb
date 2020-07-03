@@ -525,7 +525,7 @@ module Core
     pkgname = obj['pkgname'].to_s
     commit_id = obj['commit_id'].to_s
 
-    giturl = "https://git.bioconductor.org/packages/" + pkgname 
+    giturl = "https://git.bioconductor.org/packages/" + pkgname
     issue_number = get_repo_issue_number_git(pkgname)
 
     # figure out what to do...
@@ -566,7 +566,7 @@ module Core
                       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
       end
       return [200, "OK not building existing package"]
-    end      
+    end
   end
 
   def Core.handle_push(obj)
@@ -1005,16 +1005,16 @@ module Core
           A reviewer has been assigned, and your package will be
           processed by them.
 
-          **IMPORTANT**: Please read [the instructions][1] for setting
-          up a push hook on your repository, or further changes to
-          your repository will NOT trigger a new build.
+          **IMPORTANT**: Please read [this documentation][1] for setting
+          up remotes to push to git.bioconductor.org. It is required to push a
+          version bump to git.bioconductor.org to trigger a new build.
 
           The DESCRIPTION file of your package is:
 
           ```
           #{description}
           ```
-          [1]: (https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
+          [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
@@ -1160,11 +1160,11 @@ module Core
         A reviewer has been assigned to your package. Learn [what to expect][2]
         during the review process.
 
-        **IMPORTANT**: Please read [the instructions][1] for setting
-        up a push hook on your repository, or further changes to your
-        repository will NOT trigger a new build.
+        **IMPORTANT**: Please read [this documentation][1] for setting
+        up remotes to push to git.bioconductor.org. It is required to push a
+        version bump to git.bioconductor.org to trigger a new build.
 
-        [1]: https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md#adding-a-web-hook
+        [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
@@ -1183,14 +1183,16 @@ module Core
       end
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
-      # FIXME  start a build!
-      repos_url = "https://github.com/#{repos['name']}"
+
+      segs = repos['name'].split("/")
+      pkgname = segs.last
+      giturl = "https://git.bioconductor.org/packages/" + pkgname
+
       assignee = Core.get_issue_assignee(issue_number)
       unless assignee.nil?
         Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
       end
-      Core.start_build(repos_url, issue_number)
-      # FIXME return to github issue, rather than text string
+      Core.start_build(giturl, issue_number, commit_id=nil, newpackage=true)
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
     return "ok so far"
