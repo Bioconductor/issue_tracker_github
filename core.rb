@@ -92,7 +92,8 @@ class CoreConfig
   @@db = nil
   @@auth_config = nil
   @@labels = {
-    AWAITING_MODERATION_LABEL: "1. awaiting moderation",
+    AWAITING_MODERATION_LABEL: "1a. awaiting moderation",
+    AWAITING_GIT_LABEL: "1b. awaiting git addition",
     REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
@@ -1048,16 +1049,22 @@ module Core
           A reviewer has been assigned, and your package will be
           processed by them.
 
-          **IMPORTANT**: Please read [the instructions][1] for setting
-          up a push hook on your repository, or further changes to
-          your repository will NOT trigger a new build.
+          **IMPORTANT**: Please read [this documentation][1] for setting
+          up remotes to push to git.bioconductor.org. It is required to push a
+          version bump to git.bioconductor.org to trigger a new build.
+
+          Bioconductor utilized your github ssh-keys for git.bioconductor.org
+          access. To manage keys and future access you may want to active your
+          [Bioconductor Git Credentials Account][2]
+
 
           The DESCRIPTION file of your package is:
 
           ```
           #{description}
           ```
-          [1]: (https://github.com/#{Core::NEW_ISSUE_REPO}/blob/master/CONTRIBUTING.md)
+          [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
+          [2]: https://git.bioconductor.org/BiocCredentials
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
         Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
@@ -1207,25 +1214,40 @@ module Core
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 
-        [1]: https://bioconductor.org/developers/how-to/git/sync-existing-repositories
+        Bioconductor utilized your github ssh-keys for git.bioconductor.org
+        access. To manage keys and future access you may want to active your
+        [Bioconductor Git Credentials Account][3]
+
+        [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
+        [3]: https://git.bioconductor.org/BiocCredentials
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
-      Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
-        issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+
+      labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+        map{|i| i.name}
+
+      if labels.include? CoreConfig.labels[:AWAITING_MODERATION_LABEL]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+      end
+      if labels.include? CoreConfig.labels[:AWAITING_GIT_LABEL]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:AWAITING_GIT_LABEL])
+      end
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
 
       segs = repos['name'].split("/")
       pkgname = segs.last
       giturl = "https://git.bioconductor.org/packages/" + pkgname
+
       assignee = Core.get_issue_assignee(issue_number)
       unless assignee.nil?
         Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
       end
       Core.start_build(giturl, issue_number, commit_id=nil, newpackage=true)
-
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
     return "ok so far"
@@ -1277,7 +1299,7 @@ module Core
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 
-        [1]: https://bioconductor.org/developers/how-to/git/sync-existing-repositories
+        [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
