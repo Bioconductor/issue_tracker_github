@@ -19,7 +19,7 @@ get '/moderate_new_issue/:issue/:action/:password' do
     params[:password])
 end
 
-get '/moderate_additional_package/:issue/:action/:password' do
-  return Core.moderate_additional_package(params[:repos], params[:issue],
+get '/moderate_additional_package/:repos1/:repos2/:issue/:action/:password' do
+  return Core.moderate_additional_package(params[:repos1], params[:repos2], params[:issue],
   params[:action], params[:password])
 end

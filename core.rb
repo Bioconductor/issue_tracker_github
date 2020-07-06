@@ -1254,7 +1254,8 @@ module Core
 
   end
 
-  def Core.moderate_additional_package(repos_name, issue_number, action, password)
+  def Core.moderate_additional_package(repos1,repos2, issue_number, action, password)
+    repos_name = "#{repos1}/#{repos2}"
     unless Core.is_authenticated?
       return "oops, there's a problem with GitHub authentication!"
     end
@@ -1304,8 +1305,18 @@ module Core
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
-      Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
-        issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+ 
+      labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+        map{|i| i.name}
+
+      if labels.include? CoreConfig.labels[:AWAITING_MODERATION_LABEL]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+      end
+      if labels.include? CoreConfig.labels[:AWAITING_GIT_LABEL]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:AWAITING_GIT_LABEL])
+      end
 
       segs = repos_name.split("/")
       pkgname = segs.last
