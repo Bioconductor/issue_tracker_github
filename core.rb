@@ -914,6 +914,8 @@ module Core
     msg = <<-END.unindent
       Hi devteam,
 
+      ADDITIONAL PACKAGE SUBMISSION!
+
       Repository: https://github.com/#{repos}
 
       Issue:  https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
@@ -922,7 +924,7 @@ module Core
 
       Reject: #{CoreConfig.request_uri}/moderate_additional_package/#{repos}/#{issue_number}/reject/#{password}
 
-      A github repository has been submitted as an additional package to the
+      A github repository has been submitted as an ADDITIONAL PACKAGE to the
       tracker.  I'd like you to take a quick look at it.
 
       Make sure that
@@ -934,6 +936,8 @@ module Core
       2. It does not seem like a malicious package that will try to
          cause damage to our build system. Don't check exhaustively
          for this because there are many ways to hide badness.
+
+      3. The package will need to be added to git.bioconductor.org 
 
       Please approve or reject the package.
 
@@ -948,7 +952,7 @@ module Core
     END
     Core.send_email("#{from_name} <#{from_email}>",
       "#{recipient_name} <#{recipient_email}>",
-      "Action required: Please allow/reject additional package submitted to tracker (issue ##{issue_number}: #{issue[:title]})",
+      "Action required: Please allow/reject ADDITIONAL PACKAGE submitted (issue ##{issue_number}: #{issue[:title]})",
       msg)
   end
 
