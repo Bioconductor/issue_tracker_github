@@ -92,8 +92,7 @@ class CoreConfig
   @@db = nil
   @@auth_config = nil
   @@labels = {
-    AWAITING_MODERATION_LABEL: "1a. awaiting moderation",
-    AWAITING_GIT_LABEL: "1b. awaiting git addition",
+    AWAITING_MODERATION_LABEL: "1. awaiting moderation",
     REVIEW_IN_PROGRESS_LABEL: "2. review in progress",
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
@@ -1232,10 +1231,6 @@ module Core
         Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
                              issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
       end
-      if labels.include? CoreConfig.labels[:AWAITING_GIT_LABEL]
-        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
-                             issue_number, CoreConfig.labels[:AWAITING_GIT_LABEL])
-      end
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
 
@@ -1312,10 +1307,6 @@ module Core
       if labels.include? CoreConfig.labels[:AWAITING_MODERATION_LABEL]
         Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
                              issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
-      end
-      if labels.include? CoreConfig.labels[:AWAITING_GIT_LABEL]
-        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
-                             issue_number, CoreConfig.labels[:AWAITING_GIT_LABEL])
       end
 
       segs = repos_name.split("/")
