@@ -453,8 +453,7 @@ module Core
       message= <<-END.unindent
         Dear Bioconductor package administrator,
 
-        Package '#{package}' accepted. Please add this package to
-        version control.
+        Package '#{package}' accepted.
 
         Issue: https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{issue_number}
 
@@ -471,9 +470,7 @@ module Core
 
       comment= <<-END.unindent
         Your package has been accepted. It will be added to the
-        Bioconductor Git repository and nightly builds. Additional
-        information will be posed to this issue in the next several
-        days.
+        Bioconductor nightly builds.
 
         Thank you for contributing to Bioconductor!
       END
@@ -1294,13 +1291,13 @@ module Core
       return "ok, additional package rejected."
     else
       comment= <<-END.unindent
+        Additional Package has been approved for building.
 
         **IMPORTANT**: Please read [this documentation][1] for setting
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 
         [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
-        [2]: https://github.com/Bioconductor/Contributions#what-to-expect
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
