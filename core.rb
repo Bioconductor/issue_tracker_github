@@ -489,7 +489,7 @@ module Core
         accepted to Bioconductor requires a commitment on your part to
         ongoing maintenance.
 
-        Thank you for interest in Bioconductor.
+        Thank you for your interest in Bioconductor.
       END
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
       Core.close_issue(issue_number)
