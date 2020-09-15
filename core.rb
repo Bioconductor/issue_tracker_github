@@ -154,6 +154,12 @@ module Core
   GITHUB_URL_REGEX = %r{https://github.com/[^/]+/[^ /\s]+}
   NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
   REQUIRE_PREAPPROVAL = CoreConfig.auth_config['require_preapproval']
+  
+  # Version number checks
+  # x.99.z valid syntax check
+  PKG_VER_REGEX = %r{^[0-9]+[-\\.]99[-\\.][0-9]+$}
+  # x should be 0 unless pre-release check
+  PKG_VER_X_REGEX = %r{^[0]+}
 
   # FIXME - do authentication more often (on requests?) so it doesn't go stale?
   # Not sure yet if this is a problem.
@@ -814,6 +820,39 @@ module Core
     return "DESCRIPTION and issue package name differ!"
   end
 
+  def Core.handle_bad_version_number(package_ver, issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package version number, '#{package_ver}', is not formatted
+      correctly. Expecting format: 'x.99.z'.
+
+      Please fix your version number, and submit a new
+      issue. See [Bioconductor version numbers][1]
+
+      [1]: http://bioconductor.org/developers/how-to/version-numbering/
+    END
+    Core.close_issue(issue_number)
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "Invalid Version Number!"      
+  end
+
+  def Core.handle_x_version_number(package_ver, issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package version number, '#{package_ver}', does not start
+      with 0. Expecting format: '0.99.z' for new packages. Starting
+      with non-zero x of 'x.y.z' format is generally only allowed if
+      the package has been pre-released. 
+
+      We recommend fixing the version number. See [Bioconductor version numbers][1]
+
+      [1]: http://bioconductor.org/developers/how-to/version-numbering/
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "x of version number non-zero."      
+  end
 
   def Core.handle_no_ssh_keys(repos_url, package_name, issue_number,
         login, close=true)
@@ -978,12 +1017,17 @@ module Core
         return Core.handle_no_description_file(full_repos_url, issue_number, login)
       end
       package_name = description.scan(/^Package: *(.+)/).first.first.strip
-      unless (repos_url.split("/").last == package_name) or
-            (package_name == "BioThingsClient") # special case!
-        return Core.handle_package_name_mismatch(
-                 repos_url, package_name, issue_number, login
-               )
+      unless (repos_url.split("/").last == package_name) or (package_name == "BioThingsClient") # special case!
+        return Core.handle_package_name_mismatch(repos_url, package_name, issue_number, login)
       end
+      package_ver = description.scan(/^Version: *(.+)/).first.first.strip
+      if !(Core::PKG_VER_REGEX.match(package_ver))
+        return Core.handle_bad_version_number(package_ver, issue_number, login)
+      end
+      if !(Core::PKG_VER_X_REGEX.match(package_ver))
+        vl_msg = Core.handle_x_version_number(package_ver, issue_number, login)
+      end
+
       # Don't count repos keys, instead count login.keys
       # n_ssh_keys = Core.count_ssh_keys(full_repos_url)
       n_ssh_keys = Core.count_login_keys(login)
