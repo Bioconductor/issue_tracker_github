@@ -879,7 +879,8 @@ module Core
       #{files_text}
 
       If these are data files we suggest you look at [AnnotationHub][1] or
-      [ExperimentHub][2].
+      [ExperimentHub][2]. Alternatively, it is often possible to illustrate
+      package functionality with a smaller, subset of data.
 
       When the files are removed it will be important to clean your git
       history of the large files. Please see the following instructions:
