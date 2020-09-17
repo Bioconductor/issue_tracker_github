@@ -154,7 +154,7 @@ module Core
   GITHUB_URL_REGEX = %r{https://github.com/[^/]+/[^ /\s]+}
   NEW_ISSUE_REPO = CoreConfig.auth_config['issue_repo']
   REQUIRE_PREAPPROVAL = CoreConfig.auth_config['require_preapproval']
-  
+
   # Version number checks
   # x.99.z valid syntax check
   PKG_VER_REGEX = %r{^[0-9]+[-\\.]99[-\\.][0-9]+$}
@@ -834,7 +834,7 @@ module Core
     END
     Core.close_issue(issue_number)
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    return "Invalid Version Number!"      
+    return "Invalid Version Number!"
   end
 
   def Core.handle_x_version_number(package_ver, issue_number, login)
@@ -844,14 +844,56 @@ module Core
       The package version number, '#{package_ver}', does not start
       with 0. Expecting format: '0.99.z' for new packages. Starting
       with non-zero x of 'x.y.z' format is generally only allowed if
-      the package has been pre-released. 
+      the package has been pre-released.
 
       We recommend fixing the version number. See [Bioconductor version numbers][1]
 
       [1]: http://bioconductor.org/developers/how-to/version-numbering/
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    return "x of version number non-zero."      
+    return "x of version number non-zero."
+  end
+
+  def Core.check_file_size(repos_url)
+    tree = Octokit.tree(repos_url, "master", :recursive=>true)
+    rep_tree = tree[:tree]
+    big_files = Array.new
+    rep_tree.each{ |x|
+      if x[:type] == "blob"
+        if x[:size] >= 5000000
+          big_files.push(x[:path])
+        end
+      end
+    }
+    return big_files
+  end
+
+  def Core.handle_big_files_found(big_files, issue_number, login)
+    files_text = big_files.join('<br>')
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package contains individual files over 5Mb in size. This is currently
+      not allowed. Please remove the following from your repository:
+
+      #{files_text}
+
+      If these are data files we suggest you look at [AnnotationHub][1] or
+      [ExperimentHub][2].
+
+      When the files are removed it will be important to clean your git
+      history of the large files. Please see the following instructions:
+      [Cleaning large files from git][3]
+
+      I am closing this issue. Please try again with a new issue when resolved.
+
+      [1]: https://bioconductor.org/packages/AnnotationHub/
+      [2]: https://bioconductor.org/packages/ExperimentHub/
+      [3]: http://bioconductor.org/developers/how-to/git/remove-large-data/
+    END
+    Core.close_issue(issue_number)
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "Files over 5Mb present!"
   end
 
   def Core.handle_no_ssh_keys(repos_url, package_name, issue_number,
@@ -973,7 +1015,7 @@ module Core
          cause damage to our build system. Don't check exhaustively
          for this because there are many ways to hide badness.
 
-      3. The package will need to be added to git.bioconductor.org 
+      3. The package will need to be added to git.bioconductor.org
 
       Please approve or reject the package.
 
@@ -1026,6 +1068,10 @@ module Core
       end
       if !(Core::PKG_VER_X_REGEX.match(package_ver))
         vl_msg = Core.handle_x_version_number(package_ver, issue_number, login)
+      end
+      big_files = Core.check_file_size(repos_url)
+      if big_files.length > 0
+        return Core.handle_big_files_found(big_files, issue_number, login)
       end
 
       # Don't count repos keys, instead count login.keys
@@ -1345,7 +1391,7 @@ module Core
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
- 
+
       labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
         map{|i| i.name}
 
