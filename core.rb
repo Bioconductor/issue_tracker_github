@@ -855,7 +855,10 @@ module Core
   end
 
   def Core.check_file_size(repos_url)
-    tree = Octokit.tree(repos_url, "master", :recursive=>true)
+    repos_url = repos_url.sub(/\.git$/, "")
+    repos = Octokit.repository(repos_url)
+    default_branch = repos['default_branch']
+    tree = Octokit.tree(repos_url, "#{default_branch}", :recursive=>true)
     rep_tree = tree[:tree]
     big_files = Array.new
     rep_tree.each{ |x|
