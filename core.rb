@@ -334,7 +334,7 @@ module Core
     end
     comment = obj['comment']['body']
     lines = comment.split("\n")
-    pkg_line = lines.detect{|i| i =~ /^AdditionalPackage: /}
+    pkg_line = lines.detect{|i| i =~ /AdditionalPackage: /}
     if pkg_line.nil?
       return "comment did not contain AdditionalPackage: tag"
     end
