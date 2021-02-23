@@ -827,10 +827,14 @@ module Core
       The package version number, '#{package_ver}', is not formatted
       correctly. Expecting format: 'x.99.z'.
 
-      Please fix your version number, and submit a new
-      issue. See [Bioconductor version numbers][1]
+      Please fix your version number. See [Bioconductor version numbers][1]
+      Please also remember to run [BiocCheck::BiocCheck()][2] on your package
+      before submitting a new issue. BiocCheck will look for other 
+      Bioconductor package requirements.
 
       [1]: http://bioconductor.org/developers/how-to/version-numbering/
+      [2]: https://bioconductor.org/packages/BiocCheck/
+
     END
     Core.close_issue(issue_number)
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
@@ -847,8 +851,13 @@ module Core
       the package has been pre-released.
 
       We recommend fixing the version number. See [Bioconductor version numbers][1]
+      Please also consider running [BiocCheck::BiocCheck()][2] on your package
+      to look for other Bioconductor package requirements.
+
 
       [1]: http://bioconductor.org/developers/how-to/version-numbering/
+      [2]: https://bioconductor.org/packages/BiocCheck/
+
     END
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
     return "x of version number non-zero."
