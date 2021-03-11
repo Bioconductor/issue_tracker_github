@@ -615,7 +615,7 @@ module Core
 
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
-      return "Tried to build from github"
+      return [400,"Tried to build from github"]
     else
       return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
