@@ -611,26 +611,11 @@ module Core
           CoreConfig.labels[:VERSION_BUMP_LABEL])
       end
 
-      # FIXME - this might cause too much noise (emails) in the issue,
-      # it would be better to show commit info in the same comment
-      # as the link to the build report. In order to do that, we have
-      # to persist the push info somehow and retrieve it when we are
-      # ready to post the build report (note that this is done from
-      # staging.bioconductor.org whereas this app runs on
-      # issues.bioconductor.org).
-      comment= "Received a valid push; starting a build. Commits are:\n\n"
-      for commit in obj['commits']
-        msg = commit['message'].gsub(/\n/, " ")
-        msg_display_len = 50
-        if msg.length > msg_display_len
-          msg = msg[0...msg_display_len] + "..."
-        end
-        comment += "[#{commit['id'][0...7]}](#{commit['url']}) #{msg}\n"
-      end
+      comment= "Please remember to push to git.bioconductor.org to trigger a new build"
+
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
-      Core.start_build(repos, issue_number)
-      return "OK starting build"
+      return "Tried to build from github"
     else
       return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
