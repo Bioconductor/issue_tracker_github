@@ -434,6 +434,16 @@ module Core
       Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number,
       title, issue['body'])
     end
+    labels = Octokit.labels_for_issue(
+      CoreConfig.auth_config['issue_repo'], issue_number)
+    has_review_label = labels.find {
+      |i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+    }
+    if has_review_label
+      Octokit.remove_label(
+        CoreConfig.auth_config['issue_repo'], issue_number,
+        CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
+    end
     # This should be the only place where Octokit.close_issue is called directly.
     Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
   end
