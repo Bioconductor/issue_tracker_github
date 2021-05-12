@@ -316,9 +316,6 @@ module Core
     if obj.has_key? 'action' and  obj['action'] == "opened"
       return Core.handle_new_issue(obj)
     end
-    if obj.has_key? 'action' and  obj['action'] == "closed"
-      return Core.handle_closed(obj)
-    end
     [200, 'Post handled']
   end
 
@@ -421,25 +418,6 @@ module Core
     end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
     return "duplicate issue"
-  end
-
-
-  def handle_closed(obj)
-    unless Core.is_authenticated?
-      Core.authenticate
-    end
-    issue_number = obj['issue']['number']
-    labels = Octokit.labels_for_issue(
-      CoreConfig.auth_config['issue_repo'], issue_number)
-    has_review_label = labels.find {
-      |i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
-    }
-    if has_review_label
-      Octokit.remove_label(
-        CoreConfig.auth_config['issue_repo'], issue_number,
-        CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
-    end
-    return [200, "Closed Issue"]
   end
 
 
