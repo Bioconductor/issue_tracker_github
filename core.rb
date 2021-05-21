@@ -316,6 +316,9 @@ module Core
     if obj.has_key? 'action' and  obj['action'] == "opened"
       return Core.handle_new_issue(obj)
     end
+    if (obj.has_key? 'action') and  (obj['action'] == "reopened")
+      return Core.handle_reopened_issue(obj)
+    end
     [200, 'Post handled']
   end
 
@@ -1176,6 +1179,38 @@ module Core
       end
     end
     return "handled new issue"
+  end
+
+  def Core.handle_reopened_issue(obj)
+    login = obj['issue']['user']['login']
+    body = obj['issue']['body']
+    issue_number = obj['issue']['number']
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    title = issue['title']
+    if title.start_with? "(inactive) "
+      newtitle = title.gsub("(inactive) ", "")
+      Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, newtitle, issue['body'])
+    end
+    labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+               map{|i| i.name}
+    if labels.include? CoreConfig.labels[:INACTIVE_LABEL]
+      Octokit.remove_label(
+        CoreConfig.auth_config['issue_repo'], issue_number,
+        CoreConfig.labels[:INACTIVE_LABEL])
+    end
+    if not labels.include?  CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+      Octokit.add_labels_to_an_issue(
+            CoreConfig.auth_config['issue_repo'], issue_number,
+            [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
+    end
+    comment = <<-END.unindent
+      Dear @#{login} ,
+
+      We have reopened the issue to continue the review process.
+      Please remember to push a version bump to git.bioconductor.org
+      to trigger a new build.
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
   end
 
   def Core.get_issue_assignee(issue_number)
