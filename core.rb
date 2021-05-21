@@ -438,6 +438,7 @@ module Core
         CoreConfig.auth_config['issue_repo'], issue_number,
         CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
     end
+    return "handle closed issue"
   end
   
   # When you want to close an issue, use this.
