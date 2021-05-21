@@ -319,6 +319,9 @@ module Core
     if (obj.has_key? 'action') and  (obj['action'] == "reopened")
       return Core.handle_reopened_issue(obj)
     end
+    if (obj.has_key? 'action') and  (obj['action'] == "closed")
+      return Core.handle_closed_issue(obj)
+    end
     [200, 'Post handled']
   end
 
@@ -423,7 +426,20 @@ module Core
     return "duplicate issue"
   end
 
-
+  def Core.handle_closed_issue(obj)
+    login = obj['issue']['user']['login']
+    body = obj['issue']['body']
+    issue_number = obj['issue']['number']
+    issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
+    labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
+               map{|i| i.name}
+    if labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+      Octokit.remove_label(
+        CoreConfig.auth_config['issue_repo'], issue_number,
+        CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
+    end
+  end
+  
   # When you want to close an issue, use this.
   def Core.close_issue(issue_number, issue=nil)
     unless Core.is_authenticated?
