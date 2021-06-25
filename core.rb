@@ -384,6 +384,11 @@ module Core
       return Core.handle_existing_issue(existing_issue_number, issue_number, login,
         close=false)
     end
+    pkgname = repos_url.partition('/').last
+    existing_issue_number2 = Core.get_repo_issue_number_git(pkgname)
+    if not existing_issue_number2.nil?
+      return Core.handle_existing_issue2(existing_issue_number, issue_number, login)
+    end
 
     password = SecureRandom.hex(20)
     hash = BCrypt::Password.create(password)
@@ -424,6 +429,29 @@ module Core
     end
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
     return "duplicate issue"
+  end
+
+  def Core.handle_existing_issue2(existing_issue_number, issue_number, login,
+      close=true)
+    comment= <<-END.unindent
+      Dear @#{login} ,
+
+      You (or someone) has already posted a repository with the same name to our tracker.
+
+      See https://github.com/#{Core::NEW_ISSUE_REPO}/issues/#{existing_issue_number}
+
+      You cannot post the same repository more than once and packages are not
+      allowed to have the same name.
+
+      If you would like this repository to be linked to issue number: #{issue_number},
+      Please contact a Bioconductor Core Member.
+    END
+    if close
+      comment += "I am closing this issue."
+      Core.close_issue(issue_number)
+    end
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "duplicate name issue"
   end
 
   def Core.handle_closed_issue(obj)
@@ -1121,7 +1149,12 @@ module Core
       if not existing_issue_number.nil?
         return Core.handle_existing_issue(existing_issue_number, issue_number, login)
       end
-
+      pkgname = repos_url.partition('/').last
+      existing_issue_number2 = Core.get_repo_issue_number_git(pkgname)
+      if not existing_issue_number2.nil?
+        return Core.handle_existing_issue2(existing_issue_number, issue_number, login)
+      end
+      
       password = SecureRandom.hex(20)
       hash = BCrypt::Password.create(password)
       n_ssh_keys = Core.count_ssh_keys(full_repos_url)
