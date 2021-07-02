@@ -1297,6 +1297,12 @@ module Core
     if last_issue_assignee.nil? # no issues were assigned
       return logins.first
     end
+    # filter for temporary no assign
+    removeMemList = YAML::load_file(File.join(File.dirname(__FILE__),"excludeAssignmement.yml"))
+    if removeMemList
+      removeMem = removeMemList.keys
+      logins = logins - removeMem
+    end
     memhash = {}
     logins.each_with_index do |login, i|
       memhash[login] = i
