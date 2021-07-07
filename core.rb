@@ -538,6 +538,11 @@ module Core
         Bioconductor nightly builds.
 
         Thank you for contributing to Bioconductor!
+
+	Reviewers for Bioconductor packages are volunteers from the Bioconductor
+	community. If you are interested in becoming a Bioconductor package
+	reviewer, please see [Reviewers Expectations](http://contributions.bioconductor.org/reviewer-resources-overview.html).
+
       END
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
