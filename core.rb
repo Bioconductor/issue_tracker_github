@@ -1254,19 +1254,21 @@ module Core
         CoreConfig.auth_config['issue_repo'], issue_number,
         CoreConfig.labels[:INACTIVE_LABEL])
     end
-    if not labels.include?  CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
-      Octokit.add_labels_to_an_issue(
-            CoreConfig.auth_config['issue_repo'], issue_number,
-            [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
-    end
-    comment = <<-END.unindent
-      Dear @#{login} ,
+    unless labels.include?  CoreConfig.labels[:AWAITING_MODERATION_LABEL]
+      if not labels.include?  CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+        Octokit.add_labels_to_an_issue(
+              CoreConfig.auth_config['issue_repo'], issue_number,
+              [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
+      end
+      comment = <<-END.unindent
+        Dear @#{login} ,
 
-      We have reopened the issue to continue the review process.
-      Please remember to push a version bump to git.bioconductor.org
-      to trigger a new build.
-    END
-    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+        We have reopened the issue to continue the review process.
+        Please remember to push a version bump to git.bioconductor.org
+        to trigger a new build.
+      END
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    end
   end
 
   def Core.get_issue_assignee(issue_number)
