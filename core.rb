@@ -913,6 +913,27 @@ module Core
     return "x of version number non-zero."
   end
 
+  def Core.handle_no_biocviews(issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package DESCRIPTION must contain a biocViews field with one or more
+      valid biocViews terms.
+
+      Please fix your DESCRIPTION. See [current biocViews][1]
+      Please also remember to run [BiocCheck::BiocCheck()][2] on your package
+      before submitting a new issue. BiocCheck will look for other
+      Bioconductor package requirements.
+
+      [1]: https://bioconductor.org/packages/devel/BiocViews.html
+      [2]: https://bioconductor.org/packages/BiocCheck/
+
+    END
+    Core.close_issue(issue_number)
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return "No biocViews!"
+  end
+
   def Core.check_file_size(repos_url)
     repos_url = repos_url.sub(/\.git$/, "")
     repos = Octokit.repository(repos_url)
@@ -1131,6 +1152,9 @@ module Core
       end
       if !(Core::PKG_VER_X_REGEX.match(package_ver))
         vl_msg = Core.handle_x_version_number(package_ver, issue_number, login)
+      end
+      if description.scan(/^biocViews: *(.+)/).empty?
+        return Core.handle_no_biocviews(issue_number, login)
       end
       big_files = Core.check_file_size(repos_url)
       if big_files.length > 0
