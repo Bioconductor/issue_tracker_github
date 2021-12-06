@@ -878,7 +878,7 @@ module Core
       correctly. Expecting format: 'x.99.z'.
 
       Please fix your version number. See [Bioconductor version numbers][1]
-      Please also remember to run [BiocCheck::BiocCheck()][2] on your package
+      Please also remember to run [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
       before submitting a new issue. BiocCheck will look for other
       Bioconductor package requirements.
 
@@ -901,7 +901,7 @@ module Core
       the package has been pre-released.
 
       We recommend fixing the version number. See [Bioconductor version numbers][1]
-      Please also consider running [BiocCheck::BiocCheck()][2] on your package
+      Please also consider running [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
       to look for other Bioconductor package requirements.
 
 
@@ -921,7 +921,7 @@ module Core
       valid biocViews terms.
 
       Please fix your DESCRIPTION. See [current biocViews][1]
-      Please also remember to run [BiocCheck::BiocCheck()][2] on your package
+      Please also remember to run [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
       before submitting a new issue. BiocCheck will look for other
       Bioconductor package requirements.
 
