@@ -97,6 +97,9 @@ class CoreConfig
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
     INACTIVE_LABEL: "3c. inactive",
+    PREAPPROVED: "pre-check passed",
+    PENDING_CHANGES: "3e. pending pre-review changes",
+    NEED_INTEROP: "3d. needs interop",
 
     VERSION_BUMP_LABEL: "VERSION BUMP REQUIRED",
 
@@ -1454,6 +1457,18 @@ module Core
         Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
                              issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
       end
+      if labels.include? CoreConfig.labels[:PREAPPROVED]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:PREAPPROVED])
+      end
+      if labels.include? CoreConfig.labels[:PENDING_CHANGES]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:PENDING_CHANGES])
+      end
+      if labels.include? CoreConfig.labels[:NEED_INTEROP]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:NEED_INTEROP])
+      end
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
         issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
 
@@ -1530,6 +1545,18 @@ module Core
       if labels.include? CoreConfig.labels[:AWAITING_MODERATION_LABEL]
         Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
                              issue_number, CoreConfig.labels[:AWAITING_MODERATION_LABEL])
+      end
+      if labels.include? CoreConfig.labels[:PREAPPROVED]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:PREAPPROVED])
+      end
+      if labels.include? CoreConfig.labels[:PENDING_CHANGES]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:PENDING_CHANGES])
+      end
+      if labels.include? CoreConfig.labels[:NEED_INTEROP]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],
+                             issue_number, CoreConfig.labels[:NEED_INTEROP])
       end
 
       segs = repos_name.split("/")
