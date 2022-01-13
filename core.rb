@@ -1315,23 +1315,18 @@ module Core
     # it's possible there is more than one unassigned
     # so look up all issues, sorted by creation (ascending):
     issues = Octokit.issues(Core::NEW_ISSUE_REPO, {sort: 'created',
-      direction:'desc', state: 'all'})
-    last_issue_assignee = nil
+                                                   direction:'desc', state: 'all'})
+    # ruby does not allow setting environment variables so use a file
+    # cannot check last issue in issue queue for last assigned
+    # because package pre-check review is resulting in skipped and unordered
+    # assignments
+    last_issue_assignee = File.read("lastassignee.txt").split[0]
     # just in case this issue has already been assigned, don't change the assignee:
     this_issue = issues.find{|i| i[:number] == issue_number}
     if (!this_issue.nil?) and (!this_issue[:assignee].nil?)
       return nil # signal the caller not to change assignee
     end
 
-    for issue in issues
-      next if issue[:number] >= issue_number
-      next if issue[:assignee].nil?
-      last_issue_assignee = issue[:assignee][:login]
-      break
-    end
-    if last_issue_assignee.nil? # no issues were assigned
-      return logins.first
-    end
     # filter for temporary no assign
     removeMemList = YAML::load_file(File.join(File.dirname(__FILE__),"excludeAssignmement.yml"))
     if removeMemList
@@ -1343,11 +1338,14 @@ module Core
       memhash[login] = i
     end
     last_issue_index = memhash[last_issue_assignee]
-    if last_issue_index == (logins.length() -1)
-      return logins.first
+    new_assignee = nil
+    if last_issue_index.nil? || last_issue_index == (logins.length() -1)
+      new_assignee = logins.first
     else
-      return logins[last_issue_index + 1]
+      new_assignee = logins[last_issue_index + 1]
     end
+    File.write("lastassignee.txt", new_assignee, mode: "w")
+    return new_assignee
   end
 
 
