@@ -10,6 +10,14 @@ require 'aws-sdk'
 require 'stomp'
 require 'open-uri'
 require 'pry' # remove this when not needed
+require 'open-uri'
+require 'debian_control_parser'
+require 'tmpdir'
+require 'rgl/adjacency'
+require 'rgl/traversal'
+require 'rgl/connected_components'
+
+
 
 # When testing, there should be a stomp (rabbitmq) broker running, like so:
 # sudo docker run -d -e RABBITMQ_NODENAME=my-rabbit --name rabbitmq -p 61613:61613 resilva87/docker-rabbitmq-stomp
@@ -916,12 +924,134 @@ module Core
     return "x of version number non-zero."
   end
 
-  def Core.handle_no_biocviews(issue_number, login)
+  def Core.check_biocviews(description, issue_number, login)
+    parser = DebianControlParser.new(description)
+    desc_hash = Hash.new
+    parser.fields do |name,value|
+      desc_hash["#{name}"] = "#{value}".gsub(/\s+/,"")
+    end
+    ## check if biocViews in DESCRIPTION
+    if !desc_hash.keys.include? "biocViews"
+      return Core.handle_no_biocviews(issue_number, login)
+    end
+    views = desc_hash["biocViews"]
+    ## check if biocViews has any terms
+    if views.nil?
+      return Core.handle_no_biocviews(issue_number, login)
+    end
+    views = views.split(/\s*,\s*/)
+    ## check if only top level trivial view
+    topLevelViews = ["Software", "AnnotationData", "ExperimentData", "Workflow"]
+    if (views - topLevelViews).empty?
+      return Core.handle_no_biocviews(issue_number, login)
+    end
+
+    tempDir = Dir.tmpdir
+    call = "git archive --remote=ssh://git@git.bioconductor.org/packages/biocViews master inst/extdata/biocViewsVocab.sqlite | tar -x --strip=2 -C #{tempDir}"
+    system(call)
+    dbfile = "#{tempDir}/biocViewsVocab.sqlite"
+    db = SQLite3::Database.new(dbfile)
+    rows = db.execute("select * from biocViews")
+    g = RGL::DirectedAdjacencyGraph.new()
+    sort_order = []
+    for row in rows
+      g.add_edge(row.first, row.last)
+      sort_order.push row.first
+    end
+
+    ## invalids -- message but not show stopper
+    ## need to filter invalids to find one category
+    ## get value but message after issue closing problems
+    ## don't close issue
+    bad_view = []
+    for bioc_view in views
+      if !g.has_vertex? bioc_view
+        bad_view.push bioc_view
+      end
+    end
+
+    ## from one top level category
+    grev = g.reverse
+    views_filtered = (views - bad_view).uniq
+    parents = []
+    for bioc_view in views_filtered
+      paths = grev.bfs_search_tree_from(bioc_view).vertices
+      parents.concat  (paths & topLevelViews)
+    end
+    if (parents.uniq.length > 1)
+      return Core.handle_multiple_category_biocviews(parents.uniq, issue_number, login)
+    end
+
+    ## check for duplicates
+    duplicates = views.find_all{ |e| views.count(e) > 1}.uniq
+
+    ## message if duplicates or invalid entries
+    ## don't close issue
+    if ((!duplicates.empty?) || (!bad_view.empty?))
+      return Core.handle_formating_biocviews(duplicates, bad_view, issue_number, login)
+    end
+
+    return [200, "biocviews okay"]
+  end
+
+
+  def Core.handle_formating_biocviews(duplicates, bad_view, issue_number, login)
     comment = <<-END.unindent
       Dear @#{login},
 
-      The package DESCRIPTION must contain a biocViews field with one or more
-      valid biocViews terms.
+      The package DESCRIPTION must contain valid biocViews.
+
+    END
+
+    if !duplicates.empty?
+      dup = duplicates.join(", ")
+      comment = <<-END.unindent
+        #{comment}
+
+        The following duplicate terms were found:
+        #{dup}
+
+      END
+    end
+
+    if !bad_view.empty?
+      invalid_term = bad_view.join(", ")
+      comment = <<-END.unindent
+        #{comment}
+
+        The following are not valid biocViews terms and should be removed
+        #{invalid_term}
+        If you would like to request a term be added please email the
+        bioc-devel@r-project.org mailing list and provide details on
+        why and where in the hierarchy you think it should be added.
+
+      END
+    end
+
+    comment = <<-END.unindent
+      #{comment}
+
+      Please fix your DESCRIPTION. See [current biocViews][1]
+      Please also remember to run [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
+      before submitting a new issue. BiocCheck will look for other
+      Bioconductor package requirements.
+
+      [1]: https://bioconductor.org/packages/devel/BiocViews.html
+      [2]: https://bioconductor.org/packages/BiocCheck/
+
+    END
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return [200, "formatting of biocViews not okay"]
+  end
+
+  def Core.handle_multiple_category_biocviews(toplevelused, issue_number, login)
+    termsused = toplevelused.join(", ")
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package DESCRIPTION must contain a biocViews field containing terms
+      from only one top level category. Terms from the following were used:
+      #{termsused}
 
       Please fix your DESCRIPTION. See [current biocViews][1]
       Please also remember to run [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
@@ -934,7 +1064,28 @@ module Core
     END
     Core.close_issue(issue_number)
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-    return "No biocViews!"
+    return [400, "Multiple level biocViews!"]
+  end
+
+  def Core.handle_no_biocviews(issue_number, login)
+    comment = <<-END.unindent
+      Dear @#{login},
+
+      The package DESCRIPTION must contain a biocViews field with one or more
+      valid non-trivial biocViews terms.
+
+      Please fix your DESCRIPTION. See [current biocViews][1]
+      Please also remember to run [BiocCheck::BiocCheck('new-package'=TRUE)][2] on your package
+      before submitting a new issue. BiocCheck will look for other
+      Bioconductor package requirements.
+
+      [1]: https://bioconductor.org/packages/devel/BiocViews.html
+      [2]: https://bioconductor.org/packages/BiocCheck/
+
+    END
+    Core.close_issue(issue_number)
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    return [400, "No biocViews!"]
   end
 
   def Core.check_file_size(repos_url)
@@ -1156,9 +1307,10 @@ module Core
       if !(Core::PKG_VER_X_REGEX.match(package_ver))
         vl_msg = Core.handle_x_version_number(package_ver, issue_number, login)
       end
-      if description.scan(/^biocViews: *(.+)/).empty?
-        return Core.handle_no_biocviews(issue_number, login)
-      end
+      bioc_views_res = Core.check_biocviews(description, issue_number, login)
+      if (bioc_views_res[0] != 200)
+        return bioc_views_res
+      end      
       big_files = Core.check_file_size(repos_url)
       if big_files.length > 0
         return Core.handle_big_files_found(big_files, issue_number, login)

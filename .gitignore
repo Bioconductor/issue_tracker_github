@@ -1,3 +1,6 @@
 auth.yml
 .tags*
 db.sqlite3
+ReviewerEmails.yml
+excludeAssignmement.yml
+lastassignee.txt
