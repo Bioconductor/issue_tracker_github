@@ -893,7 +893,7 @@ module Core
       before submitting a new issue. BiocCheck will look for other
       Bioconductor package requirements.
 
-      [1]: http://bioconductor.org/developers/how-to/version-numbering/
+      [1]: http://contributions.bioconductor.org/description.html#description-ver
       [2]: https://bioconductor.org/packages/BiocCheck/
 
     END
@@ -916,7 +916,7 @@ module Core
       to look for other Bioconductor package requirements.
 
 
-      [1]: http://bioconductor.org/developers/how-to/version-numbering/
+      [1]: http://contributions.bioconductor.org/description.html#description-ver
       [2]: https://bioconductor.org/packages/BiocCheck/
 
     END
@@ -1127,7 +1127,7 @@ module Core
 
       [1]: https://bioconductor.org/packages/AnnotationHub/
       [2]: https://bioconductor.org/packages/ExperimentHub/
-      [3]: http://bioconductor.org/developers/how-to/git/remove-large-data/
+      [3]: http://contributions.bioconductor.org/git-version-control.html#remove-large-data-files-and-clean-git-tree
     END
     Core.close_issue(issue_number)
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
@@ -1400,7 +1400,7 @@ module Core
           ```
           #{description}
           ```
-          [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
+          [1]: http://contributions.bioconductor.org/git-version-control.html#new-package-workflow
           [2]: https://git.bioconductor.org/BiocCredentials
         END
         Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
@@ -1593,7 +1593,7 @@ module Core
         access. To manage keys and future access you may want to active your
         [Bioconductor Git Credentials Account][3]
 
-        [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
+        [1]: http://contributions.bioconductor.org/git-version-control.html#new-package-workflow
         [2]: https://github.com/Bioconductor/Contributions#what-to-expect
         [3]: https://git.bioconductor.org/BiocCredentials
       END
@@ -1684,7 +1684,7 @@ module Core
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 
-        [1]: https://bioconductor.org/developers/how-to/git/new-package-workflow/
+        [1]: http://contributions.bioconductor.org/git-version-control.html#new-package-workflow
       END
       Octokit.add_comment(CoreConfig.auth_config['issue_repo'], issue_number,
         comment)
