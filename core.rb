@@ -949,9 +949,9 @@ module Core
     tempDir = Dir.tmpdir
     call = "git archive --remote=ssh://git@git.bioconductor.org/packages/biocViews master inst/extdata/biocViewsVocab.sqlite | tar -x --strip=2 -C #{tempDir}"
     system(call)
-    dbfile = "#{tempDir}/biocViewsVocab.sqlite"
-    db = SQLite3::Database.new(dbfile)
-    rows = db.execute("select * from biocViews")
+    dbfileViews = "#{tempDir}/biocViewsVocab.sqlite"
+    dbv = SQLite3::Database.new(dbfileViews)
+    rows = dbv.execute("select * from biocViews")
     g = RGL::DirectedAdjacencyGraph.new()
     sort_order = []
     for row in rows
