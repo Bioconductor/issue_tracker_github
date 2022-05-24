@@ -378,7 +378,7 @@ module Core
     repos_url = full_repos_url.sub("https://github.com/", "")
     unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
       return Core.handle_repo_does_not_exist(repos_url, issue_number, login,
-      close=false)
+      close=true)
     end
     github_repo_name = Core.get_repo_name(repos_url)
     unless repos_url == github_repo_name
