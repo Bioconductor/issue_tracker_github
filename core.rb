@@ -398,7 +398,7 @@ module Core
     pkgname = repos_url.partition('/').last
     existing_issue_number2 = Core.get_repo_issue_number_git(pkgname)
     if not existing_issue_number2.nil?
-      return Core.handle_existing_issue2(existing_issue_number, issue_number, login)
+      return Core.handle_existing_issue2(existing_issue_number2, issue_number, login)
     end
 
     password = SecureRandom.hex(20)
