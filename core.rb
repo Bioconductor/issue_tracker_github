@@ -22,6 +22,8 @@ require 'rgl/connected_components'
 # When testing, there should be a stomp (rabbitmq) broker running, like so:
 # sudo docker run -d -e RABBITMQ_NODENAME=my-rabbit --name rabbitmq -p 61613:61613 resilva87/docker-rabbitmq-stomp
 
+## To manually read a payload
+## require 'json' ; file = File.read("./payloadOpenIssue") ; obj = JSON.parse(file)
 
 class String
   # Strip leading whitespace from each line that is the same as the
@@ -105,6 +107,7 @@ class CoreConfig
     ACCEPTED_LABEL: "3a. accepted",
     DECLINED_LABEL: "3b. declined",
     INACTIVE_LABEL: "3c. inactive",
+    PREREVIEW_LABEL: "pre-review",
     PREAPPROVED: "pre-check passed",
     PENDING_CHANGES: "3e. pending pre-review changes",
     NEED_INTEROP: "3d. needs interop",
@@ -361,18 +364,14 @@ module Core
     end
     issue_state = obj['issue']['state']
     labels = obj['issue']['labels'].map{|i| i['name']}
-    build_ok1 = (issue_state == "open" and
-      labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
-    build_ok2 = (issue_state == "closed" and
-      labels.include? CoreConfig.labels[:TESTING_LABEL])
+    build_ok1 = (issue_state == "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL]))
+    build_ok2 = (issue_state == "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL])
     issue_number = obj['issue']['number']
     unless build_ok1 or build_ok2
-      msg =  "Can't build unless issue is open and '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}' label is present, or issue is closed and '#{CoreConfig.labels[:TESTING_LABEL]}' label is present."
+      msg =  "Can't build unless issue is open and past pre-review stage, or issue is closed and '#{CoreConfig.labels[:TESTING_LABEL]}' label is present."
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, msg)
       return msg
     end
-
-
 
     full_repos_url = match.first.strip
     repos_url = full_repos_url.sub("https://github.com/", "")
@@ -477,6 +476,11 @@ module Core
         CoreConfig.auth_config['issue_repo'], issue_number,
         CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
     end
+    if labels.include? CoreConfig.labels[:PREREVIEW_LABEL]
+      Octokit.remove_label(
+        CoreConfig.auth_config['issue_repo'], issue_number,
+        CoreConfig.labels[:PREREVIEW_LABEL])
+    end
     return "handle closed issue"
   end
   
@@ -496,13 +500,17 @@ module Core
     end
     labels = Octokit.labels_for_issue(
       CoreConfig.auth_config['issue_repo'], issue_number)
-    has_review_label = labels.find {
-      |i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
-    }
+    has_review_label = labels.find { |i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}
     if has_review_label
       Octokit.remove_label(
         CoreConfig.auth_config['issue_repo'], issue_number,
         CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL])
+    end
+    has_review_label = labels.find { |i| i.name == CoreConfig.labels[:PREREVIEW_LABEL]}
+    if has_review_label
+      Octokit.remove_label(
+        CoreConfig.auth_config['issue_repo'], issue_number,
+        CoreConfig.labels[:PREREVIEW_LABEL])
     end
     # This should be the only place where Octokit.close_issue is called directly.
     Octokit.close_issue(Core::NEW_ISSUE_REPO, issue_number)
@@ -576,6 +584,18 @@ module Core
       Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
       Core.close_issue(issue_number)
       return "ok, package inactive, issue closed"
+    elsif obj['label']['name'] == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+       comment= <<-END.unindent
+        A reviewer has been assigned to your package for an indepth review.
+        Please respond accordingly to any further comments from the reviewer.
+
+      END
+      Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+      assignee = Core.get_issue_assignee(issue_number)
+      unless assignee.nil?
+        Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
+      end
+      return "ok, assigned reviewer"
     end
     return "handle_issue_label_added"
   end
@@ -607,7 +627,7 @@ module Core
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
       labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
                  map{|i| i.name}
-      if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+      if issue['state'] = "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL])
         build_ok = true
         newpackage = true
       elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
@@ -634,7 +654,8 @@ module Core
       return [200, "OK starting build"]
     else
       if newpackage
-        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
+        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:PREREVIEW_LABEL]}'
+                      label or '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
                       label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
       end
       return [200, "OK not building existing package"]
@@ -656,11 +677,10 @@ module Core
     unless push_branch == default_branch
       return "#{push_branch} branch ignored, only handling #{default_branch}"
     end
-
     build_ok = false
     labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
       map{|i| i.name}
-    if issue['state'] = "open" and labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+    if issue['state'] = "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL])
       build_ok = true
     elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
       build_ok = true
@@ -668,9 +688,7 @@ module Core
     if build_ok
       labels = Octokit.labels_for_issue(
         CoreConfig.auth_config['issue_repo'], issue_number)
-      has_version_bump_label = labels.find {
-        |i| i.name == CoreConfig.labels[:VERSION_BUMP_LABEL]
-      }
+      has_version_bump_label = labels.find { |i| i.name == CoreConfig.labels[:VERSION_BUMP_LABEL]}
 
       unless Core.version_has_bumped? obj
         if not has_version_bump_label
@@ -693,8 +711,8 @@ module Core
 
       return [400,"Tried to build from github"]
     else
-      return "can't build unless issue is open and has the '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
-      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
+      return "can't build unless issue is open and has the '#{CoreConfig.labels[:PREREVIEW_LABEL]}'
+             label or '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}' label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."
     end
   end
 
@@ -1315,7 +1333,6 @@ module Core
       if big_files.length > 0
         return Core.handle_big_files_found(big_files, issue_number, login)
       end
-
       # Don't count repos keys, instead count login.keys
       # n_ssh_keys = Core.count_ssh_keys(full_repos_url)
       n_ssh_keys = Core.count_login_keys(login)
@@ -1377,8 +1394,8 @@ module Core
 
         return Core.handle_preapproval(repos_url, issue_number, password)
       else
-        comment = <<-END.unindent
-          Thanks, @#{login} !
+        comment = <<-END
+          Thanks, @#{login}
 
           You submitted a single valid GitHub URL that points to an R
           package (it has a DESCRIPTION file).
@@ -1386,7 +1403,7 @@ module Core
           A reviewer has been assigned, and your package will be
           processed by them.
 
-          **IMPORTANT**: Please read [this documentation][1] for setting
+          IMPORTANT: Please read [this documentation][1] for setting
           up remotes to push to git.bioconductor.org. It is required to push a
           version bump to git.bioconductor.org to trigger a new build.
 
@@ -1433,8 +1450,13 @@ module Core
         CoreConfig.auth_config['issue_repo'], issue_number,
         CoreConfig.labels[:INACTIVE_LABEL])
     end
+    assignee = Core.get_issue_assignee(issue_number)
     unless labels.include?  CoreConfig.labels[:AWAITING_MODERATION_LABEL]
-      if not labels.include?  CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]
+      if assignee.nil?
+        Octokit.add_labels_to_an_issue(
+              CoreConfig.auth_config['issue_repo'], issue_number,
+              [CoreConfig.labels[:PREREVIEW_LABEL]])
+      else
         Octokit.add_labels_to_an_issue(
               CoreConfig.auth_config['issue_repo'], issue_number,
               [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
@@ -1557,8 +1579,8 @@ module Core
       return("this issue has already been rejected (and closed).")
     end
     labels = Octokit.labels_for_issue(CoreConfig.auth_config['issue_repo'], issue_number)
-    if labels.find {|i| i.name == CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}
-      return "this issue has already been marked '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'."
+    if labels.find {|i| i.name == CoreConfig.labels[:PREREVIEW_LABEL]}
+      return "this issue has already been marked '#{CoreConfig.labels[:PREREVIEW_LABEL]}'."
     end
     if action == "reject"
       comment= <<-END.unindent
@@ -1582,12 +1604,16 @@ module Core
       return "ok, issue rejected."
     else
       comment= <<-END.unindent
-        A reviewer has been assigned to your package. Learn [what to expect][2]
-        during the review process.
+        Your package has been added to git.bioconductor.org to continue the 
+        pre-review process.  A build report will be posted shortly. Please
+        fix any ERROR and WARNING in the build report before a reviewer is
+        assigned or provide a justification on why you feel the ERROR or 
+        WARNING should be granted an exception.
 
-        **IMPORTANT**: Please read [this documentation][1] for setting
-        up remotes to push to git.bioconductor.org. It is required to push a
-        version bump to git.bioconductor.org to trigger a new build.
+        IMPORTANT: Please read [this documentation][1] for setting
+        up remotes to push to git.bioconductor.org. All changes should be
+        pushed to git.bioconductor.org moving forward. It is required to push a
+        version bump to git.bioconductor.org to trigger a new build report.
 
         Bioconductor utilized your github ssh-keys for git.bioconductor.org
         access. To manage keys and future access you may want to active your
@@ -1620,16 +1646,12 @@ module Core
                              issue_number, CoreConfig.labels[:NEED_INTEROP])
       end
       Octokit.add_labels_to_an_issue(CoreConfig.auth_config['issue_repo'],
-        issue_number, [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
+        issue_number, [CoreConfig.labels[:PREREVIEW_LABEL]])
 
       segs = repos['name'].split("/")
       pkgname = segs.last
       giturl = "https://git.bioconductor.org/packages/" + pkgname
 
-      assignee = Core.get_issue_assignee(issue_number)
-      unless assignee.nil?
-        Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
-      end
       Core.start_build(giturl, issue_number, commit_id=nil, newpackage=true)
       return "ok, marked issue as 'ok_to_build', starting a build..."
     end
@@ -1680,7 +1702,7 @@ module Core
       comment= <<-END.unindent
         Additional Package has been approved for building.
 
-        **IMPORTANT**: Please read [this documentation][1] for setting
+        IMPORTANT: Please read [this documentation][1] for setting
         up remotes to push to git.bioconductor.org. It is required to push a
         version bump to git.bioconductor.org to trigger a new build.
 

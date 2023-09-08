@@ -1,0 +1,38 @@
+## To manually read a payload
+require 'json'
+file = File.read("./payloadOpenIssue")
+obj = JSON.parse(file)
+  
+
+
+## Have a rabbitmq running locally
+sudo docker run -d -e RABBITMQ_NODENAME=my-rabbit --name rabbitmq -p 61613:61613 resilva87/docker-rabbitmq-stomp
+docker restart rabbitmq
+
+## Change auth.yml to use localhost for stomp
+## production uses rabbitmq.bioconductor.org
+
+## launch app
+ruby app.rb
+
+## launch rest of spb locally
+## https://github.com/Bioconductor/packagebuilder/blob/UpdateVersions/documentation/Developing.md
+source ../env/bin/activate
+python3 -m workers.server
+python3 -m archiver
+python3 -m track_build_completion
+python3 -m anage runserver 0.0.0.0:8000
+  
+
+## test desired payloads by sending a post response to api endpoint using httr in R:
+
+library(httr)
+library(jsonlite)
+library(readr)
+
+GET("http://localhost:4567")
+
+url = "http://localhost:4567"
+payload = read_file("payloadOpenIssue")
+temp = POST(url, body = payload)
+
