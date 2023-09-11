@@ -595,7 +595,13 @@ module Core
       unless assignee.nil?
         Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
       end
-      return "ok, assigned reviewer"
+      labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO,
+                                        issue_number).map{|i| i.name}
+      if labels.include? CoreConfig.labels[:PREREVIEW_LABEL]
+        Octokit.remove_label(CoreConfig.auth_config['issue_repo'],issue_number,
+                             CoreConfig.labels[:PREREVIEW_LABEL])
+      end
+      return [200, "OK; assigned reviewer"]
     end
     return "handle_issue_label_added"
   end
@@ -630,6 +636,9 @@ module Core
       if issue['state'] = "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL])
         build_ok = true
         newpackage = true
+      elsif issue['state'] = "open"
+        build_ok = false
+        newpackage = true
       elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
         build_ok = true
         newpackage = true
@@ -654,11 +663,15 @@ module Core
       return [200, "OK starting build"]
     else
       if newpackage
-        return [400, "can't build unless issue is open and has the '#{CoreConfig.labels[:PREREVIEW_LABEL]}'
-                      label or '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}'
-                      label, or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label."]
+        comment = <<-END.unindent 
+          cannot build unless issue is open and has the
+          '#{CoreConfig.labels[:PREREVIEW_LABEL]}' label or '#{CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]}' label, 
+          or is closed and has the '#{CoreConfig.labels[:TESTING_LABEL]}' label.
+        END
+        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+        return [400, "Issue not in a state to allow building"]
       end
-      return [200, "OK not building existing package"]
+      return [200, "OK; Not building existing package or closed issue."]
     end
   end
 

@@ -21,7 +21,7 @@ source ../env/bin/activate
 python3 -m workers.server
 python3 -m archiver
 python3 -m track_build_completion
-python3 -m anage runserver 0.0.0.0:8000
+python3 -m manage runserver 0.0.0.0:8000
   
 
 ## test desired payloads by sending a post response to api endpoint using httr in R:
@@ -30,9 +30,31 @@ library(httr)
 library(jsonlite)
 library(readr)
 
+## "nothing to see here"
 GET("http://localhost:4567")
 
+## Open issue payload that puts awaiting moderation and sends email
 url = "http://localhost:4567"
 payload = read_file("payloadOpenIssue")
 temp = POST(url, body = payload)
 
+##
+## Moderation email has acceptance url like the following
+## http://localhost:4567/moderate_new_issue/3140/approve/8f78f962215ad6f1b7871b553cfda3879e12e7bb
+## This kicks off build and swaps tags
+## Hard to mock this as last part is a bcrypt hash code and must be in package db
+## 
+
+
+## To mock a call from the build system hook
+url = "http://localhost:4567/start_build"
+build_info = '{"pkgname":"spbtest5", "commit_id":"fdcf48d0e8e585d38b3b14554d97bf1d45bd007d"}'
+temp = POST(url, body = build_info)
+
+
+## Change Label payload
+## Make sure the label in payload is the right one for testing as different
+## labels result in different actions in the code
+url = "http://localhost:4567"
+payload = read_file("payloadLabeled")
+temp = POST(url, body = payload)
