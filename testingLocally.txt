@@ -4,6 +4,10 @@ file = File.read("./payloadOpenIssue")
 obj = JSON.parse(file)
   
 
+## manually in ruby
+obj = {"pkgname"=>"TENxIO", "commit_id"=>"99539deb2931b3cc16001eb60290038264349ca8"}
+
+
 
 ## Have a rabbitmq running locally
 sudo docker run -d -e RABBITMQ_NODENAME=my-rabbit --name rabbitmq -p 61613:61613 resilva87/docker-rabbitmq-stomp
@@ -50,7 +54,6 @@ temp = POST(url, body = payload)
 url = "http://localhost:4567/start_build"
 build_info = '{"pkgname":"spbtest5", "commit_id":"fdcf48d0e8e585d38b3b14554d97bf1d45bd007d"}'
 temp = POST(url, body = build_info)
-
 
 ## Change Label payload
 ## Make sure the label in payload is the right one for testing as different

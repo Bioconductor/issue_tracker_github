@@ -633,13 +633,13 @@ module Core
       issue = Octokit.issue(Core::NEW_ISSUE_REPO, issue_number)
       labels = Octokit.labels_for_issue(Core::NEW_ISSUE_REPO, issue_number).
                  map{|i| i.name}
-      if issue['state'] = "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL])
+      if (issue['state'] == "open" and (labels.include? CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL] or labels.include? CoreConfig.labels[:PREREVIEW_LABEL]))
         build_ok = true
         newpackage = true
-      elsif issue['state'] = "open"
+      elsif issue['state'] == "open"
         build_ok = false
         newpackage = true
-      elsif issue['state'] = "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL]
+      elsif (issue['state'] == "closed" and labels.include? CoreConfig.labels[:TESTING_LABEL])
         build_ok = true
         newpackage = true
       elsif labels.include? CoreConfig.labels[:ACCEPTED_LABEL]
