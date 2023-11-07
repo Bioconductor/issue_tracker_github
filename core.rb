@@ -961,6 +961,13 @@ module Core
     parser.fields do |name,value|
       desc_hash["#{name}"] = "#{value}".gsub(/\s+/,"")
     end
+    ## check if book and if so skip biocViews checks
+    if desc_hash.keys.include? "BiocType"
+      bioctype = desc_hash["BiocType"].downcase
+      if bioctype == "book"
+        return [200, "biocviews skipped"]
+      end
+    end
     ## check if biocViews in DESCRIPTION
     if !desc_hash.keys.include? "biocViews"
       return Core.handle_no_biocviews(issue_number, login)
