@@ -1509,7 +1509,9 @@ module Core
     # it's possible there is more than one unassigned
     # so look up all issues, sorted by creation (ascending):
     issues = Octokit.issues(Core::NEW_ISSUE_REPO, {sort: 'created',
-                                                   direction:'desc', state: 'all'})
+                                                   direction:'desc',
+                                                   state: 'all',
+                                                   per_page: 100})
     # ruby does not allow setting environment variables so use a file
     # cannot check last issue in issue queue for last assigned
     # because package pre-check review is resulting in skipped and unordered
