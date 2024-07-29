@@ -149,7 +149,7 @@ reviewers.each{ |rev|
     msg_body = File.read(file_name)
     from_email = "bioc-github-noreply@bioconductor.org"
     from_name = "Bioconductor Package Review Submission Tracker"
-    if (totNum == 0)
+    if (totNum != 0)
       send_email("#{from_name} <#{from_email}>", "#{fullName} <#{emailTo}>",
                  "Bioconductor Package Review Reminder", msg_body)
     end
