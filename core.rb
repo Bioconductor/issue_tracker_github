@@ -985,7 +985,7 @@ module Core
     end
 
     tempDir = Dir.tmpdir
-    call = "git archive --remote=ssh://git@git.bioconductor.org/packages/biocViews master inst/extdata/biocViewsVocab.sqlite | tar -x --strip=2 -C #{tempDir}"
+    call = "git archive --remote=ssh://git@git.bioconductor.org/packages/biocViews devel inst/extdata/biocViewsVocab.sqlite | tar -x --strip=2 -C #{tempDir}"
     system(call)
     dbfileViews = "#{tempDir}/biocViewsVocab.sqlite"
     dbv = SQLite3::Database.new(dbfileViews)
