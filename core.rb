@@ -1314,142 +1314,21 @@ module Core
   def Core.handle_new_issue(obj)
     puts "got a new issue!"
     login = obj['issue']['user']['login']
-    body = obj['issue']['body']
-    match = body.scan(Core::GITHUB_URL_REGEX)
     issue_number = obj['issue']['number']
-    if match.empty? # no github url present
-      return Core.handle_no_repos_url(issue_number, login)
-    elsif match.length > 1 # multiple github urls present
-      return Core.handle_multiple_urls(issue_number, login)
-    else # there is just one URL
-      full_repos_url = match.first.strip
-      repos_url = full_repos_url.sub("https://github.com/", "")
-      unless Core.repo_exists_in_github? (repos_url) # github url points to nonexistent repos
-        return Core.handle_repo_does_not_exist(repos_url, issue_number, login)
-      end
-      if repos_url.start_with? "Bioconductor-mirror"
-        return Core.handle_bioconductor_mirror_repo(issue_number, login)
-      end
-      description = Core.get_description_file(repos_url)
-      if description.nil?
-        return Core.handle_no_description_file(full_repos_url, issue_number, login)
-      end
-      package_name = description.scan(/^Package: *(.+)/).first.first.strip
-      unless (repos_url.split("/").last == package_name) or (package_name == "BioThingsClient") # special case!
-        return Core.handle_package_name_mismatch(repos_url, package_name, issue_number, login)
-      end
-      package_ver = description.scan(/^Version: *(.+)/).first.first.strip
-      if !(Core::PKG_VER_REGEX.match(package_ver))
-        return Core.handle_bad_version_number(package_ver, issue_number, login)
-      end
-      if !(Core::PKG_VER_X_REGEX.match(package_ver))
-        vl_msg = Core.handle_x_version_number(package_ver, issue_number, login)
-      end
-      bioc_views_res = Core.check_biocviews(description, issue_number, login)
-      if (bioc_views_res[0] != 200)
-        return bioc_views_res
-      end      
-      big_files = Core.check_file_size(repos_url)
-      if big_files.length > 0
-        return Core.handle_big_files_found(big_files, issue_number, login)
-      end
-      # Don't count repos keys, instead count login.keys
-      # n_ssh_keys = Core.count_ssh_keys(full_repos_url)
-      n_ssh_keys = Core.count_login_keys(login)
+    comment= <<-END
+      Hi @#{login}
 
-      if (n_ssh_keys == 0)
-        return Core.handle_no_ssh_keys(repos_url, package_name,
-                                       issue_number, login, close=true)
-      end
+      Thanks for submitting your package.
+      The submission repository for Bioconductor Package Review has moved.
+      Please submit your package at: https://github.com/Bioconductor/BiocContributions
+      There is a [Slide Deck](https://docs.google.com/presentation/d/1EK2wsDoRbtVGECdYC1GU5nGtYkN-h_7R-on-CSUC6CQ/edit?slide=id.p#slide=id.p) on How to Submit and What to Expect
 
-      # looking good so far....
-      # FIXME - also make sure it's not a repos in Bioconductor-mirror
-      # or another one that we definitely know about referring
-      # to a package that has already been accepted.
+    END
+    comment = comment.unindent
 
-      existing_issue_number = Core.get_repo_issue_number(repos_url)
-      if not existing_issue_number.nil?
-        return Core.handle_existing_issue(existing_issue_number, issue_number, login)
-      end
-      pkgname = repos_url.partition('/').last
-      existing_issue_number2 = Core.get_repo_issue_number_git(pkgname)
-      if not existing_issue_number2.nil?
-        return Core.handle_existing_issue2(existing_issue_number, issue_number, login)
-      end
-      
-      password = SecureRandom.hex(20)
-      hash = BCrypt::Password.create(password)
-      n_ssh_keys = Core.count_ssh_keys(full_repos_url)
-      Core.add_repos_to_db(repos_url, hash, issue_number, login)
-      if REQUIRE_PREAPPROVAL
-        comment= <<-END
-          Hi @#{login}
+    Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
+    Core.close_issue(issue_number)
 
-          Thanks for submitting your package. We are taking a quick
-          look at it and you will hear back from us soon.
-
-          The DESCRIPTION file for this package is:
-
-          ```
-          #{description}
-          ```
-
-        END
-        # if (n_ssh_keys == 0)
-        #   add_keys_comment= <<-END
-
-        #     **Add SSH keys** to your GitHub account. SSH keys
-        #     will are used to control access to accepted _Bioconductor_
-        #     packages. See [these instructions][1] to add SSH keys to
-        #     your GitHub account.
-
-        #     [1]: https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/
-
-        #   END
-        #   comment += add_keys_comment
-        # end
-        comment = comment.unindent
-
-        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-
-        return Core.handle_preapproval(repos_url, issue_number, password)
-      else
-        comment = <<-END
-          Thanks, @#{login}
-
-          You submitted a single valid GitHub URL that points to an R
-          package (it has a DESCRIPTION file).
-
-          A reviewer has been assigned, and your package will be
-          processed by them.
-
-          IMPORTANT: Please read [this documentation][1] for setting
-          up remotes to push to git.bioconductor.org. It is required to push a
-          version bump to git.bioconductor.org to trigger a new build.
-
-          Bioconductor utilized your github ssh-keys for git.bioconductor.org
-          access. To manage keys and future access you may want to active your
-          [Bioconductor Git Credentials Account][2]
-
-
-          The DESCRIPTION file of your package is:
-
-          ```
-          #{description}
-          ```
-          [1]: http://contributions.bioconductor.org/git-version-control.html#new-package-workflow
-          [2]: https://git.bioconductor.org/BiocCredentials
-        END
-        Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
-        Octokit.add_labels_to_an_issue(Core::NEW_ISSUE_REPO, issue_number,
-          [CoreConfig.labels[:REVIEW_IN_PROGRESS_LABEL]])
-        assignee = Core.get_issue_assignee(issue_number)
-        unless assignee.nil?
-          Octokit.update_issue(Core::NEW_ISSUE_REPO, issue_number, assignee: assignee)
-        end
-        Core.start_build(repos_url, issue_number)
-      end
-    end
     return "handled new issue"
   end
 
