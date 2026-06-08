@@ -411,6 +411,8 @@ module Core
       We are taking a quick look at it and you will hear back from us soon.
     END
     comment = comment.unindent
+
+    comment = comment.encode("UTF-8", invalid: :replace, undef: :replace, replace: "")
     Octokit.add_comment(Core::NEW_ISSUE_REPO, issue_number, comment)
 
     return Core.handle_preapproval_additional_package(repos_url, issue_number, password)
